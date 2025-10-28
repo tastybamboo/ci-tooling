@@ -125,7 +125,7 @@ jobs:
           LATEST_34="${{ steps.check.outputs.LATEST_34 }}"
           LATEST_BUNDLER="${{ steps.check.outputs.LATEST_BUNDLER }}"
 
-          # Build the Ruby versions array and CSV string
+          # Build the Ruby versions array and CSV string (in order: 3.2, 3.3, 3.4)
           RUBY_ARRAY=""
           RUBY_CSV=""
           if [ -n "$LATEST_32" ]; then
@@ -213,7 +213,7 @@ jobs:
             This is an automated update to keep the CI environment current with the latest stable releases.
           branch: automated/update-ruby-bundler
           delete-branch: true
-          title: "chore: Update Ruby and Bundler versions"
+          title: 'chore: Update Ruby and Bundler versions'
           body: |
             ## 🤖 Automated Dependency Update
 

@@ -14,38 +14,38 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
-    # Build essentials
-    build-essential \
-    git \
-    curl \
-    wget \
-    # PostgreSQL client
-    postgresql-client \
-    # Image processing
-    libvips42 \
-    imagemagick \
-    libmagickwand-dev \
-    # For Nokogiri
-    libxml2-dev \
-    libxslt1-dev \
-    # For pg gem
-    libpq-dev \
-    # For psych gem (YAML parsing)
-    libyaml-dev \
-    # For rbnacl gem (used by JWT/OAuth)
-    libsodium-dev \
-    # Browser testing dependencies
-    chromium \
-    chromium-driver \
-    xvfb \
-    # Additional utilities
-    sudo \
-    locales \
-    # YAML linting
-    yamllint \
-    # Clean up
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+  # Build essentials
+  build-essential \
+  git \
+  curl \
+  wget \
+  # PostgreSQL client
+  postgresql-client \
+  # Image processing
+  libvips42 \
+  imagemagick \
+  libmagickwand-dev \
+  # For Nokogiri
+  libxml2-dev \
+  libxslt1-dev \
+  # For pg gem
+  libpq-dev \
+  # For psych gem (YAML parsing)
+  libyaml-dev \
+  # For rbnacl gem (used by JWT/OAuth)
+  libsodium-dev \
+  # Browser testing dependencies
+  chromium \
+  chromium-driver \
+  xvfb \
+  # Additional utilities
+  sudo \
+  locales \
+  # YAML linting
+  yamllint \
+  # Clean up
+  && rm -rf /var/lib/apt/lists/* \
+  && apt-get clean
 
 # Generate locale
 RUN locale-gen en_US.UTF-8
@@ -58,24 +58,24 @@ ENV CHROME_BIN=/usr/bin/chromium
 ENV CHROMIUM_FLAGS="--no-sandbox --headless --disable-gpu --disable-dev-shm-usage"
 
 # Install specific bundler version that matches your Gemfile.lock
-RUN gem install bundler:2.7.1
+RUN gem install bundler:2.7.2
 
 # Create a non-root user for running tests (optional but recommended)
 RUN useradd -m -s /bin/bash panda && \
-    echo 'panda ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+  echo 'panda ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
 # Set up common Ruby gems that are used across all projects
 # This speeds up bundle install in CI
 RUN gem install \
-    rake \
-    rspec \
-    standard \
-    rubocop \
-    rubocop-rails \
-    rubocop-rspec \
-    erb_lint \
-    brakeman \
-    bundle-audit
+  rake \
+  rspec \
+  standard \
+  rubocop \
+  rubocop-rails \
+  rubocop-rspec \
+  erb_lint \
+  brakeman \
+  bundle-audit
 
 # Pre-create common directories
 RUN mkdir -p /app /tmp/cache
