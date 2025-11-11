@@ -113,12 +113,12 @@ jobs:
 
           Last updated: $(date +'%Y-%m-%d %H:%M:%S UTC')
 
-          ### Ruby 3.4
+          ### Ruby 3.4 (latest)
+          - \`ghcr.io/tastybamboo/panda-ci:latest\`
           - \`ghcr.io/tastybamboo/panda-ci:ruby-3.4\`
           - \`ghcr.io/tastybamboo/panda-ci:ruby-3.4-${DATE}\`
 
-          ### Ruby 3.3 (latest)
-          - \`ghcr.io/tastybamboo/panda-ci:latest\`
+          ### Ruby 3.3
           - \`ghcr.io/tastybamboo/panda-ci:ruby-3.3\`
           - \`ghcr.io/tastybamboo/panda-ci:ruby-3.3-${DATE}\`
 
