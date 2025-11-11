@@ -42,7 +42,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/tastybamboo/panda-ci:ruby-3.4.5
+      image: ghcr.io/tastybamboo/panda-ci:ruby-3.4.7
     steps:
       - uses: actions/checkout@v4
 
@@ -52,7 +52,7 @@ jobs:
 
 ## 📦 What's Included
 
-- **Ruby versions**: 3.2.6, 3.3.7, 3.4.5 (latest)
+- **Ruby versions**: 3.2.9, 3.3.10, 3.4.7 (latest)
 - **System packages**:
   - PostgreSQL client
   - ImageMagick & libvips (image processing)
@@ -60,7 +60,7 @@ jobs:
   - Xvfb (headless browser testing)
   - Build essentials
 - **Pre-installed gems**:
-  - bundler 2.7.1
+  - bundler 2.7.2
   - Common testing/linting gems (rspec, standard, rubocop, etc.)
 - **Configuration**:
   - UTC timezone
@@ -70,12 +70,12 @@ jobs:
 ## 🏷️ Available Tags
 
 ### Latest (Recommended)
-- `ghcr.io/tastybamboo/panda-ci:latest` - Ruby 3.4.5 (amd64 + arm64)
+- `ghcr.io/tastybamboo/panda-ci:latest` - Ruby 3.4.7 (amd64 + arm64)
 
 ### By Ruby Version
-- `ghcr.io/tastybamboo/panda-ci:ruby-3.4.5` - Ruby 3.4.5
-- `ghcr.io/tastybamboo/panda-ci:ruby-3.3.7` - Ruby 3.3.7
-- `ghcr.io/tastybamboo/panda-ci:ruby-3.2.6` - Ruby 3.2.6
+- `ghcr.io/tastybamboo/panda-ci:ruby-3.4.7` - Ruby 3.4.7
+- `ghcr.io/tastybamboo/panda-ci:ruby-3.3.10` - Ruby 3.3.10
+- `ghcr.io/tastybamboo/panda-ci:ruby-3.2.9` - Ruby 3.2.9
 
 ### Architecture Support
 - **Daily/Push builds**: `linux/amd64` only (optimized for CI speed)
@@ -83,9 +83,9 @@ jobs:
 
 ### Date-Tagged Versions
 For reproducible builds:
-- `ghcr.io/tastybamboo/panda-ci:ruby-3.4.5-20250813`
-- `ghcr.io/tastybamboo/panda-ci:ruby-3.3.7-20250813`
-- `ghcr.io/tastybamboo/panda-ci:ruby-3.2.6-20250813`
+- `ghcr.io/tastybamboo/panda-ci:ruby-3.4.7-20251110`
+- `ghcr.io/tastybamboo/panda-ci:ruby-3.3.10-20251110`
+- `ghcr.io/tastybamboo/panda-ci:ruby-3.2.9-20251110`
 
 ## 💻 Usage Examples
 
@@ -99,7 +99,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/tastybamboo/panda-ci:ruby-3.4.5
+      image: ghcr.io/tastybamboo/panda-ci:ruby-3.4.7
 
     services:
       postgres:
@@ -132,7 +132,7 @@ jobs:
   test:
     strategy:
       matrix:
-        ruby-version: ['3.2.6', '3.3.7', '3.4.5']
+        ruby-version: ['3.2.9', '3.3.10', '3.4.7']
 
     runs-on: ubuntu-latest
     container:
@@ -150,7 +150,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/tastybamboo/panda-ci:ruby-3.4.5
+      image: ghcr.io/tastybamboo/panda-ci:ruby-3.4.7
 
     steps:
       - uses: actions/checkout@v4
@@ -178,14 +178,14 @@ You can use these images locally for consistent development environments:
 
 ```bash
 # Pull the image
-docker pull ghcr.io/tastybamboo/panda-ci:ruby-3.4.5
+docker pull ghcr.io/tastybamboo/panda-ci:ruby-3.4.7
 
 # Run tests in a container
-docker run --rm -v $(pwd):/app ghcr.io/tastybamboo/panda-ci:ruby-3.4.5 \
+docker run --rm -v $(pwd):/app ghcr.io/tastybamboo/panda-ci:ruby-3.4.7 \
   bash -c "bundle install && bundle exec rspec"
 
 # Interactive development
-docker run -it --rm -v $(pwd):/app ghcr.io/tastybamboo/panda-ci:ruby-3.4.5 bash
+docker run -it --rm -v $(pwd):/app ghcr.io/tastybamboo/panda-ci:ruby-3.4.7 bash
 ```
 
 ## 🔄 Automatic Updates
