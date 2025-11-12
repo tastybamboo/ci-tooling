@@ -53,9 +53,13 @@ ENV LANG=en_US.UTF-8
 ENV LANGUAGE=en_US:en
 ENV LC_ALL=en_US.UTF-8
 
-# Configure Chromium for headless operation
+# Configure Chromium for headless operation with optimized flags
 ENV CHROME_BIN=/usr/bin/chromium
-ENV CHROMIUM_FLAGS="--no-sandbox --headless --disable-gpu --disable-dev-shm-usage"
+ENV CHROMIUM_FLAGS="--no-sandbox --headless --disable-gpu --disable-dev-shm-usage --disable-software-rasterizer --disable-extensions --disable-background-networking --metrics-recording-only --mute-audio"
+
+# Pre-warm Chrome to speed up first test execution
+RUN chromium --headless --no-sandbox --disable-gpu --print-to-pdf=/tmp/test.pdf about:blank && \
+    rm /tmp/test.pdf
 
 # Install specific bundler version that matches your Gemfile.lock
 RUN gem install bundler:2.7.2
@@ -66,9 +70,16 @@ RUN useradd -m -s /bin/bash panda && \
 
 # Set up common Ruby gems that are used across all projects
 # This speeds up bundle install in CI
+
+# Testing & CI tools
 RUN gem install \
   rake \
   rspec \
+  rspec-rails \
+  parallel_tests
+
+# Code quality & linting
+RUN gem install \
   standard \
   rubocop \
   rubocop-rails \
@@ -76,6 +87,17 @@ RUN gem install \
   erb_lint \
   brakeman \
   bundle-audit
+
+# Commonly used application dependencies
+RUN gem install \
+  rails-controller-testing \
+  capybara \
+  cuprite \
+  database_cleaner-active_record \
+  shoulda-matchers \
+  simplecov \
+  simplecov-json \
+  pg
 
 # Pre-create common directories
 RUN mkdir -p /app /tmp/cache
