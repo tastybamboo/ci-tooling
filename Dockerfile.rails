@@ -1,0 +1,170 @@
+# Panda CI Rails-specific Docker Image
+# Builds images with pre-installed gems for specific Rails versions
+# This dramatically speeds up CI by having gems already installed
+
+ARG RUBY_VERSION=3.3
+ARG RAILS_VERSION=8.0.4
+
+FROM ruby:${RUBY_VERSION}-slim
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Set timezone to UTC
+ENV TZ=UTC
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+  # Build essentials
+  build-essential \
+  git \
+  curl \
+  wget \
+  # PostgreSQL client
+  postgresql-client \
+  libpq-dev \
+  # SQLite
+  sqlite3 \
+  libsqlite3-dev \
+  # Image processing
+  libvips42 \
+  imagemagick \
+  libmagickwand-dev \
+  # For Nokogiri
+  libxml2-dev \
+  libxslt1-dev \
+  # For psych gem (YAML parsing)
+  libyaml-dev \
+  # For rbnacl gem (used by JWT/OAuth)
+  libsodium-dev \
+  # Browser testing dependencies
+  chromium \
+  chromium-driver \
+  xvfb \
+  # Utilities
+  sudo \
+  locales \
+  # YAML linting
+  yamllint \
+  # Clean up
+  && rm -rf /var/lib/apt/lists/* \
+  && apt-get clean
+
+# Generate locale
+RUN locale-gen en_US.UTF-8
+ENV LANG=en_US.UTF-8
+ENV LANGUAGE=en_US:en
+ENV LC_ALL=en_US.UTF-8
+
+# Configure Chromium for headless operation
+ENV CHROME_BIN=/usr/bin/chromium
+ENV CHROMIUM_FLAGS="--no-sandbox --headless --disable-gpu --disable-dev-shm-usage --disable-software-rasterizer --disable-extensions --disable-background-networking --metrics-recording-only --mute-audio"
+
+# Pre-warm Chrome
+RUN chromium --headless --no-sandbox --disable-gpu --print-to-pdf=/tmp/test.pdf about:blank && \
+    rm /tmp/test.pdf
+
+# Install bundler
+RUN gem install bundler:2.5.23
+
+# Create non-root user
+RUN useradd -m -s /bin/bash panda && \
+  echo 'panda ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+
+# Create a temporary app directory for gem installation
+WORKDIR /tmp/gem-install
+
+# Set Rails and Ruby version environment variables
+ENV RAILS_VERSION=${RAILS_VERSION}
+ENV RUBY_VERSION=${RUBY_VERSION}
+
+# Generate a Gemfile based on Rails version
+RUN echo "source 'https://rubygems.org'" > Gemfile && \
+  echo "gem 'rails', '${RAILS_VERSION}'" >> Gemfile && \
+  echo "" >> Gemfile && \
+  echo "# Asset pipeline" >> Gemfile && \
+  case "${RAILS_VERSION}" in \
+    7.0.*) \
+      echo "gem 'propshaft', '~> 0.6.4'" >> Gemfile && \
+      echo "gem 'importmap-rails', '~> 1.2'" >> Gemfile && \
+      echo "gem 'turbo-rails', '~> 1.5'" >> Gemfile && \
+      echo "gem 'stimulus-rails', '~> 1.3'" >> Gemfile && \
+      echo "gem 'sqlite3', '~> 1.4'" >> Gemfile && \
+      echo "gem 'pg', '~> 1.1'" >> Gemfile && \
+      echo "gem 'puma', '~> 5.6'" >> Gemfile \
+      ;; \
+    7.1.*) \
+      echo "gem 'propshaft', '~> 0.8.0'" >> Gemfile && \
+      echo "gem 'importmap-rails', '~> 1.2'" >> Gemfile && \
+      echo "gem 'turbo-rails', '~> 1.5'" >> Gemfile && \
+      echo "gem 'stimulus-rails', '~> 1.3'" >> Gemfile && \
+      echo "gem 'sqlite3', '~> 1.4'" >> Gemfile && \
+      echo "gem 'pg', '~> 1.1'" >> Gemfile && \
+      echo "gem 'puma', '~> 6.0'" >> Gemfile \
+      ;; \
+    7.2.*) \
+      echo "gem 'propshaft', '~> 0.9.0'" >> Gemfile && \
+      echo "gem 'importmap-rails', '~> 2.0'" >> Gemfile && \
+      echo "gem 'turbo-rails', '~> 2.0'" >> Gemfile && \
+      echo "gem 'stimulus-rails', '~> 1.3'" >> Gemfile && \
+      echo "gem 'sqlite3', '>= 1.4'" >> Gemfile && \
+      echo "gem 'pg', '~> 1.1'" >> Gemfile && \
+      echo "gem 'puma', '~> 6.0'" >> Gemfile \
+      ;; \
+    8.0.*) \
+      echo "gem 'propshaft', '~> 1.0.0'" >> Gemfile && \
+      echo "gem 'importmap-rails', '~> 2.0'" >> Gemfile && \
+      echo "gem 'turbo-rails', '~> 2.0'" >> Gemfile && \
+      echo "gem 'stimulus-rails', '~> 1.3'" >> Gemfile && \
+      echo "gem 'sqlite3', '>= 2.0'" >> Gemfile && \
+      echo "gem 'pg', '~> 1.5'" >> Gemfile && \
+      echo "gem 'puma', '>= 5.0'" >> Gemfile \
+      ;; \
+    8.1.*) \
+      echo "gem 'propshaft', '~> 1.1.0'" >> Gemfile && \
+      echo "gem 'importmap-rails', '~> 2.0'" >> Gemfile && \
+      echo "gem 'turbo-rails', '~> 2.0'" >> Gemfile && \
+      echo "gem 'stimulus-rails', '~> 1.3'" >> Gemfile && \
+      echo "gem 'sqlite3', '>= 2.0'" >> Gemfile && \
+      echo "gem 'pg', '~> 1.5'" >> Gemfile && \
+      echo "gem 'puma', '>= 5.0'" >> Gemfile \
+      ;; \
+  esac && \
+  echo "" >> Gemfile && \
+  echo "# Testing gems" >> Gemfile && \
+  echo "gem 'rspec-rails'" >> Gemfile && \
+  echo "gem 'capybara'" >> Gemfile && \
+  echo "gem 'cuprite'" >> Gemfile && \
+  echo "gem 'database_cleaner-active_record'" >> Gemfile && \
+  echo "gem 'shoulda-matchers'" >> Gemfile && \
+  echo "gem 'simplecov'" >> Gemfile && \
+  echo "gem 'factory_bot_rails'" >> Gemfile && \
+  echo "" >> Gemfile && \
+  echo "# Code quality" >> Gemfile && \
+  echo "gem 'standard'" >> Gemfile && \
+  echo "gem 'erb_lint'" >> Gemfile && \
+  echo "gem 'brakeman'" >> Gemfile && \
+  echo "gem 'bundle-audit'" >> Gemfile
+
+# Install all the gems
+RUN bundle config set --local path '/usr/local/bundle' && \
+  bundle config set --local without 'development' && \
+  bundle install --jobs 4 --retry 3 && \
+  rm -rf /tmp/gem-install
+
+# Set working directory
+WORKDIR /app
+
+# Add health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD ruby -v || exit 1
+
+# Labels
+LABEL org.opencontainers.image.source="https://github.com/tastybamboo/panda-ci"
+LABEL org.opencontainers.image.description="Rails ${RAILS_VERSION} on Ruby ${RUBY_VERSION} CI environment"
+LABEL org.opencontainers.image.licenses="BSD-3-Clause"
+LABEL maintainer="Otaina Limited"
+
+# Default command
+CMD ["/bin/bash"]

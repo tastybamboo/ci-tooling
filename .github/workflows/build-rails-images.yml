@@ -1,0 +1,160 @@
+---
+name: Build Rails-specific Docker Images
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'Dockerfile.rails'
+      - '.github/workflows/build-rails-images.yml'
+  workflow_dispatch:
+  schedule:
+    # Rebuild weekly for security updates
+    - cron: '0 0 * * 0'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: tastybamboo/panda-ci
+
+jobs:
+  build-rails-images:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        include:
+          # === COMPATIBILITY MATRIX ===
+          # Rails 7.0: Ruby 2.7+ (we support 3.2, 3.3 only)
+          # Rails 7.1: Ruby 3.0+ (we support 3.2, 3.3, 3.4)
+          # Rails 7.2: Ruby 3.1+ (we support 3.2, 3.3, 3.4)
+          # Rails 8.0: Ruby 3.2+ (we support 3.2, 3.3, 3.4)
+          # Rails 8.1: Ruby 3.2+ (we support 3.2, 3.3, 3.4)
+
+          # Ruby 3.2 - supports all Rails versions
+          - ruby: '3.2'
+            rails: '7.0.10'
+            latest_7_0: true
+          - ruby: '3.2'
+            rails: '7.1.6'
+            latest_7_1: true
+          - ruby: '3.2'
+            rails: '7.2.3'
+            latest_7_2: true
+          - ruby: '3.2'
+            rails: '8.0.4'
+          - ruby: '3.2'
+            rails: '8.1.1'
+
+          # Ruby 3.3 - supports all Rails versions
+          - ruby: '3.3'
+            rails: '7.0.10'
+          - ruby: '3.3'
+            rails: '7.1.6'
+          - ruby: '3.3'
+            rails: '7.2.3'
+          - ruby: '3.3'
+            rails: '8.0.4'
+            latest_8_0: true
+          - ruby: '3.3'
+            rails: '8.1.1'
+            latest_8_1: true
+
+          # Ruby 3.4 - NOT compatible with Rails 7.0
+          # Rails 7.0 requires Ruby < 3.4 due to keyword argument changes
+          - ruby: '3.4'
+            rails: '7.1.6'
+          - ruby: '3.4'
+            rails: '7.2.3'
+          - ruby: '3.4'
+            rails: '8.0.4'
+          - ruby: '3.4'
+            rails: '8.1.1'
+            latest: true  # This is the absolute latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Rails major.minor version
+        id: version
+        run: |
+          RAILS_MM=$(echo "${{ matrix.rails }}" | cut -d. -f1,2)
+          echo "rails_mm=${RAILS_MM}" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.rails
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ruby-${{ matrix.ruby }}-rails-${{ matrix.rails }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ruby-${{ matrix.ruby }}-rails-${{ steps.version.outputs.rails_mm }}
+          build-args: |
+            RUBY_VERSION=${{ matrix.ruby }}
+            RAILS_VERSION=${{ matrix.rails }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: Tag as latest for series
+        if: github.event_name != 'pull_request'
+        run: |
+          # Tag as latest for each Rails series when it's the latest of that series
+          if [ "${{ matrix.latest_7_0 }}" = "true" ]; then
+            docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ruby-${{ matrix.ruby }}-rails-${{ matrix.rails }} \
+                      ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rails-7.0-latest
+            docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rails-7.0-latest
+          fi
+
+          if [ "${{ matrix.latest_7_1 }}" = "true" ]; then
+            docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ruby-${{ matrix.ruby }}-rails-${{ matrix.rails }} \
+                      ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rails-7.1-latest
+            docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rails-7.1-latest
+          fi
+
+          if [ "${{ matrix.latest_7_2 }}" = "true" ]; then
+            docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ruby-${{ matrix.ruby }}-rails-${{ matrix.rails }} \
+                      ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rails-7.2-latest
+            docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rails-7.2-latest
+          fi
+
+          if [ "${{ matrix.latest_8_0 }}" = "true" ]; then
+            docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ruby-${{ matrix.ruby }}-rails-${{ matrix.rails }} \
+                      ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rails-8.0-latest
+            docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rails-8.0-latest
+          fi
+
+          if [ "${{ matrix.latest_8_1 }}" = "true" ]; then
+            docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ruby-${{ matrix.ruby }}-rails-${{ matrix.rails }} \
+                      ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rails-8.1-latest
+            docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rails-8.1-latest
+          fi
+
+          if [ "${{ matrix.latest }}" = "true" ]; then
+            docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ruby-${{ matrix.ruby }}-rails-${{ matrix.rails }} \
+                      ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rails-latest
+            docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rails-latest
+          fi
+
+      - name: Test image
+        if: github.event_name != 'pull_request'
+        run: |
+          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ruby-${{ matrix.ruby }}-rails-${{ matrix.rails }} ruby -v
+          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ruby-${{ matrix.ruby }}-rails-${{ matrix.rails }} rails -v
+          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ruby-${{ matrix.ruby }}-rails-${{ matrix.rails }} bundler -v

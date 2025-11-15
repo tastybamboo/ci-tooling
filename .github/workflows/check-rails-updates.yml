@@ -1,0 +1,241 @@
+---
+name: Check for Rails Updates
+
+on:
+  schedule:
+    # Run daily at 3 AM UTC (1 hour after Ruby check)
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  check-rails-updates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+
+      - name: Check for Rails updates
+        id: check
+        run: |
+          # Get current Rails versions from build-rails-images.yml
+          echo "Extracting current Rails versions..."
+          CURRENT_70=$(grep -E "rails: '7\.0\.[0-9]+'" .github/workflows/build-rails-images.yml | head -1 | sed "s/.*rails: '\(7\.0\.[0-9]*\)'.*/\1/")
+          CURRENT_71=$(grep -E "rails: '7\.1\.[0-9]+'" .github/workflows/build-rails-images.yml | head -1 | sed "s/.*rails: '\(7\.1\.[0-9]*\)'.*/\1/")
+          CURRENT_72=$(grep -E "rails: '7\.2\.[0-9]+'" .github/workflows/build-rails-images.yml | head -1 | sed "s/.*rails: '\(7\.2\.[0-9]*\)'.*/\1/")
+          CURRENT_80=$(grep -E "rails: '8\.0\.[0-9]+'" .github/workflows/build-rails-images.yml | head -1 | sed "s/.*rails: '\(8\.0\.[0-9]*\)'.*/\1/")
+          CURRENT_81=$(grep -E "rails: '8\.1\.[0-9]+'" .github/workflows/build-rails-images.yml | head -1 | sed "s/.*rails: '\(8\.1\.[0-9]*\)'.*/\1/")
+
+          echo "Current Rails versions:"
+          echo "  7.0: $CURRENT_70"
+          echo "  7.1: $CURRENT_71"
+          echo "  7.2: $CURRENT_72"
+          echo "  8.0: $CURRENT_80"
+          echo "  8.1: $CURRENT_81"
+
+          # Fetch latest Rails versions from RubyGems API
+          echo "Fetching latest Rails versions from RubyGems..."
+
+          # Function to get latest patch version for a Rails minor version
+          get_latest_rails() {
+            local minor_version=$1
+            curl -s "https://rubygems.org/api/v1/versions/rails.json" | \
+              jq -r ".[] | select(.number | startswith(\"$minor_version.\")) | .number" | \
+              head -1
+          }
+
+          LATEST_70=$(get_latest_rails "7.0")
+          LATEST_71=$(get_latest_rails "7.1")
+          LATEST_72=$(get_latest_rails "7.2")
+          LATEST_80=$(get_latest_rails "8.0")
+          LATEST_81=$(get_latest_rails "8.1")
+
+          # Check for new minor versions (8.2, 8.3, etc.)
+          LATEST_RAILS=$(curl -s "https://rubygems.org/api/v1/gems/rails.json" | jq -r '.version')
+          LATEST_MAJOR=$(echo $LATEST_RAILS | cut -d. -f1)
+          LATEST_MINOR=$(echo $LATEST_RAILS | cut -d. -f1,2)
+
+          echo "Latest Rails versions:"
+          echo "  7.0: $LATEST_70"
+          echo "  7.1: $LATEST_71"
+          echo "  7.2: $LATEST_72"
+          echo "  8.0: $LATEST_80"
+          echo "  8.1: $LATEST_81"
+          echo "  Latest overall: $LATEST_RAILS"
+
+          # Check if updates are needed
+          UPDATES_NEEDED=false
+          UPDATE_MESSAGE=""
+
+          # Check each version
+          if [ -n "$LATEST_70" ] && [ "$CURRENT_70" != "$LATEST_70" ]; then
+            UPDATES_NEEDED=true
+            UPDATE_MESSAGE="${UPDATE_MESSAGE}- Rails 7.0: $CURRENT_70 → $LATEST_70\n"
+          fi
+
+          if [ -n "$LATEST_71" ] && [ "$CURRENT_71" != "$LATEST_71" ]; then
+            UPDATES_NEEDED=true
+            UPDATE_MESSAGE="${UPDATE_MESSAGE}- Rails 7.1: $CURRENT_71 → $LATEST_71\n"
+          fi
+
+          if [ -n "$LATEST_72" ] && [ "$CURRENT_72" != "$LATEST_72" ]; then
+            UPDATES_NEEDED=true
+            UPDATE_MESSAGE="${UPDATE_MESSAGE}- Rails 7.2: $CURRENT_72 → $LATEST_72\n"
+          fi
+
+          if [ -n "$LATEST_80" ] && [ "$CURRENT_80" != "$LATEST_80" ]; then
+            UPDATES_NEEDED=true
+            UPDATE_MESSAGE="${UPDATE_MESSAGE}- Rails 8.0: $CURRENT_80 → $LATEST_80\n"
+          fi
+
+          if [ -n "$LATEST_81" ] && [ "$CURRENT_81" != "$LATEST_81" ]; then
+            UPDATES_NEEDED=true
+            UPDATE_MESSAGE="${UPDATE_MESSAGE}- Rails 8.1: $CURRENT_81 → $LATEST_81\n"
+          fi
+
+          # Check for new minor version (e.g., 8.2 when we only have 8.1)
+          if [ "$LATEST_MINOR" != "8.1" ] && [ "$LATEST_MINOR" != "8.0" ] && \
+             [ "$LATEST_MINOR" != "7.2" ] && [ "$LATEST_MINOR" != "7.1" ] && \
+             [ "$LATEST_MINOR" != "7.0" ]; then
+            UPDATES_NEEDED=true
+            UPDATE_MESSAGE="${UPDATE_MESSAGE}- New Rails version available: $LATEST_RAILS\n"
+            UPDATE_MESSAGE="${UPDATE_MESSAGE}  ⚠️ Manual intervention required to add support for Rails $LATEST_MINOR\n"
+          fi
+
+          # Save results
+          echo "UPDATES_NEEDED=$UPDATES_NEEDED" >> $GITHUB_OUTPUT
+          echo "UPDATE_MESSAGE<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$UPDATE_MESSAGE" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "LATEST_70=$LATEST_70" >> $GITHUB_OUTPUT
+          echo "LATEST_71=$LATEST_71" >> $GITHUB_OUTPUT
+          echo "LATEST_72=$LATEST_72" >> $GITHUB_OUTPUT
+          echo "LATEST_80=$LATEST_80" >> $GITHUB_OUTPUT
+          echo "LATEST_81=$LATEST_81" >> $GITHUB_OUTPUT
+          echo "LATEST_RAILS=$LATEST_RAILS" >> $GITHUB_OUTPUT
+
+      - name: Update files if needed
+        if: steps.check.outputs.UPDATES_NEEDED == 'true'
+        run: |
+          # Update Rails versions in build-rails-images.yml
+          LATEST_70="${{ steps.check.outputs.LATEST_70 }}"
+          LATEST_71="${{ steps.check.outputs.LATEST_71 }}"
+          LATEST_72="${{ steps.check.outputs.LATEST_72 }}"
+          LATEST_80="${{ steps.check.outputs.LATEST_80 }}"
+          LATEST_81="${{ steps.check.outputs.LATEST_81 }}"
+
+          # Update build-rails-images.yml
+          if [ -n "$LATEST_70" ]; then
+            sed -i "s/rails: '7\.0\.[0-9]*'/rails: '$LATEST_70'/g" .github/workflows/build-rails-images.yml
+          fi
+          if [ -n "$LATEST_71" ]; then
+            sed -i "s/rails: '7\.1\.[0-9]*'/rails: '$LATEST_71'/g" .github/workflows/build-rails-images.yml
+          fi
+          if [ -n "$LATEST_72" ]; then
+            sed -i "s/rails: '7\.2\.[0-9]*'/rails: '$LATEST_72'/g" .github/workflows/build-rails-images.yml
+          fi
+          if [ -n "$LATEST_80" ]; then
+            sed -i "s/rails: '8\.0\.[0-9]*'/rails: '$LATEST_80'/g" .github/workflows/build-rails-images.yml
+          fi
+          if [ -n "$LATEST_81" ]; then
+            sed -i "s/rails: '8\.1\.[0-9]*'/rails: '$LATEST_81'/g" .github/workflows/build-rails-images.yml
+          fi
+
+          # Update COMPATIBILITY.md with new versions
+          if [ -n "$LATEST_70" ]; then
+            sed -i "s/Rails 7\.0\.[0-9]*/Rails 7.0.$LATEST_70/g" COMPATIBILITY.md
+            sed -i "s/rails-7\.0\.[0-9]*/rails-$LATEST_70/g" COMPATIBILITY.md
+          fi
+          if [ -n "$LATEST_71" ]; then
+            sed -i "s/Rails 7\.1\.[0-9]*/Rails 7.1.$LATEST_71/g" COMPATIBILITY.md
+            sed -i "s/rails-7\.1\.[0-9]*/rails-$LATEST_71/g" COMPATIBILITY.md
+          fi
+          if [ -n "$LATEST_72" ]; then
+            sed -i "s/Rails 7\.2\.[0-9]*/Rails 7.2.$LATEST_72/g" COMPATIBILITY.md
+            sed -i "s/rails-7\.2\.[0-9]*/rails-$LATEST_72/g" COMPATIBILITY.md
+          fi
+          if [ -n "$LATEST_80" ]; then
+            sed -i "s/Rails 8\.0\.[0-9]*/Rails 8.0.$LATEST_80/g" COMPATIBILITY.md
+            sed -i "s/rails-8\.0\.[0-9]*/rails-$LATEST_80/g" COMPATIBILITY.md
+          fi
+          if [ -n "$LATEST_81" ]; then
+            sed -i "s/Rails 8\.1\.[0-9]*/Rails 8.1.$LATEST_81/g" COMPATIBILITY.md
+            sed -i "s/rails-8\.1\.[0-9]*/rails-$LATEST_81/g" COMPATIBILITY.md
+          fi
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Merge main branch
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git merge origin/main --no-edit || true
+
+      - name: Create Pull Request
+        if: steps.changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.WORKFLOW_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
+          commit-message: |
+            chore: Update Rails versions
+
+            ${{ steps.check.outputs.UPDATE_MESSAGE }}
+
+            This is an automated update to keep the CI environment current with the latest Rails releases.
+          branch: automated/update-rails-versions
+          delete-branch: true
+          title: 'chore: Update Rails versions'
+          body: |
+            ## 🤖 Automated Rails Version Update
+
+            This PR updates the following Rails versions:
+
+            ${{ steps.check.outputs.UPDATE_MESSAGE }}
+
+            ### Changes Made:
+            - Updated Rails versions in `.github/workflows/build-rails-images.yml`
+            - Updated compatibility documentation in `COMPATIBILITY.md`
+
+            ### Important Notes:
+            - Ruby/Rails compatibility has been maintained
+            - Ruby 3.4 + Rails 7.0 remains excluded (incompatible)
+            - All Docker images will be rebuilt with new Rails versions
+
+            ### Checklist:
+            - [ ] Review the version changes
+            - [ ] Verify no breaking changes in Rails updates
+            - [ ] Ensure Docker images build successfully
+            - [ ] Test with panda-core CI matrix
+
+            ---
+            *This PR was automatically generated by the daily Rails update check workflow.*
+
+      - name: Trigger Docker image builds
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          # Trigger the Rails image build workflow
+          curl -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/build-rails-images.yml/dispatches \
+            -d '{"ref":"main"}'
