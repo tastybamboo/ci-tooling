@@ -159,5 +159,5 @@ jobs:
         if: github.event_name != 'pull_request'
         run: |
           docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ruby-${{ matrix.ruby }}-rails-${{ matrix.rails }} ruby -v
-          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ruby-${{ matrix.ruby }}-rails-${{ matrix.rails }} bundle exec rails -v
+          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ruby-${{ matrix.ruby }}-rails-${{ matrix.rails }} sh -c 'gem list rails && rails -v'
           docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ruby-${{ matrix.ruby }}-rails-${{ matrix.rails }} bundle -v
