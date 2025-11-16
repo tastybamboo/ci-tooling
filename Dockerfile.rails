@@ -7,6 +7,10 @@ ARG RAILS_VERSION=8.0.4
 
 FROM ruby:${RUBY_VERSION}-slim
 
+# Re-declare ARGs after FROM to make them available in this stage
+ARG RUBY_VERSION
+ARG RAILS_VERSION
+
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
