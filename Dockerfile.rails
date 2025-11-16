@@ -151,14 +151,10 @@ RUN echo "source 'https://rubygems.org'" > Gemfile && \
   echo "gem 'brakeman'" >> Gemfile && \
   echo "gem 'bundle-audit'" >> Gemfile
 
-# Install all the gems
-RUN bundle config set --local path '/usr/local/bundle' && \
-  bundle config set --local without 'development' && \
+# Install all the gems system-wide (no custom path)
+RUN bundle config set --local without 'development' && \
   bundle install --jobs 4 --retry 3 && \
   rm -rf /tmp/gem-install
-
-# Add gem binaries to PATH so rails, rspec, etc. are available
-ENV PATH="/usr/local/bundle/bin:${PATH}"
 
 # Set working directory
 WORKDIR /app
