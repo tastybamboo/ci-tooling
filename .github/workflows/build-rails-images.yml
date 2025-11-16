@@ -115,6 +115,9 @@ jobs:
       - name: Tag as latest for series
         if: github.event_name != 'pull_request'
         run: |
+          # Pull the image first so we can tag it locally
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ruby-${{ matrix.ruby }}-rails-${{ matrix.rails }}
+
           # Tag as latest for each Rails series when it's the latest of that series
           if [ "${{ matrix.latest_7_0 }}" = "true" ]; then
             docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ruby-${{ matrix.ruby }}-rails-${{ matrix.rails }} \
