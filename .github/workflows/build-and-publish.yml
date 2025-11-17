@@ -44,7 +44,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        ruby-version: ${{ fromJson(github.event.inputs.ruby_versions && format('[{0}]', github.event.inputs.ruby_versions) || '["3.2.9", "3.3.10", "3.4.7"]') }}
+        ruby-version: ${{ fromJson(github.event.inputs.ruby_versions && format('["{0}"]', join(split(github.event.inputs.ruby_versions, ','), '", "')) || '["3.2.9", "3.3.10", "3.4.7"]') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
