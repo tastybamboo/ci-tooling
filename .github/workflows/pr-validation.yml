@@ -132,7 +132,7 @@ jobs:
         run: |
           echo "Testing Rails version..."
           docker run --rm test-image:${{ matrix.dockerfile }} \
-            sh -c 'gem list rails && rails -v'
+            sh -c 'gem list rails && bundle exec rails -v'
 
       # ============================================================
       # Chrome tests (not for lean image)

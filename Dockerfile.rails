@@ -113,7 +113,7 @@ RUN bundle install --jobs 4 --retry 3
 
 # Verify Rails is installed and accessible
 RUN echo "Rails version:" && \
-    rails --version && \
+    bundle exec rails --version && \
     echo "Installed gems:" && \
     gem list | grep -E "(rails|propshaft|turbo|stimulus)"
 
