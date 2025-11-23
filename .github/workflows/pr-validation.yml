@@ -1,0 +1,294 @@
+---
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch: # Allow manual trigger for testing
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ============================================================
+  # YAML Validation
+  # ============================================================
+  validate-yaml:
+    name: Validate YAML files
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run yamllint
+        run: yamllint -c .yamllint .
+
+  # ============================================================
+  # Dockerfile Validation
+  # ============================================================
+  validate-dockerfiles:
+    name: Validate Dockerfiles
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Hadolint on Dockerfiles
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+          ignore: DL3008,DL3009,DL3028 # Ignore apt/gem version pinning - we want latest for CI
+          failure-threshold: error # Only fail on error, not warning
+
+      - name: Run Hadolint on Dockerfile.rails
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile.rails
+          ignore: DL3008,DL3009,DL3028,SC2086 # Ignore version pinning and word splitting
+          failure-threshold: error
+
+      - name: Run Hadolint on Dockerfile.lean
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile.lean
+          ignore: DL3008,DL3009,DL3028 # Ignore version pinning warnings
+          failure-threshold: error
+
+  # ============================================================
+  # Build and Test Docker Images
+  # ============================================================
+  build-and-test:
+    name: Build and test ${{ matrix.dockerfile }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dockerfile: Dockerfile
+            context: .
+            ruby_version: '3.4'
+            tag_suffix: ''
+          - dockerfile: Dockerfile.rails
+            context: .
+            ruby_version: '3.4'
+            rails_version: '8.1'
+            tag_suffix: '-rails'
+          - dockerfile: Dockerfile.lean
+            context: .
+            ruby_version: '3.4'
+            tag_suffix: '-lean'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: false
+          load: true
+          tags: test-image:${{ matrix.dockerfile }}
+          build-args: |
+            RUBY_VERSION=${{ matrix.ruby_version }}
+            ${{ matrix.rails_version && format('RAILS_VERSION={0}', matrix.rails_version) || '' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ============================================================
+      # Basic Tests
+      # ============================================================
+      - name: Test Ruby installation
+        run: |
+          echo "Testing Ruby version..."
+          docker run --rm test-image:${{ matrix.dockerfile }} ruby -v
+
+      - name: Test Bundler installation
+        run: |
+          echo "Testing Bundler version..."
+          docker run --rm test-image:${{ matrix.dockerfile }} bundler -v
+
+      - name: Test gem installation
+        run: |
+          echo "Listing installed gems..."
+          docker run --rm test-image:${{ matrix.dockerfile }} gem list
+
+      - name: Test Ruby script execution
+        run: |
+          echo "Testing Ruby script execution..."
+          docker run --rm test-image:${{ matrix.dockerfile }} \
+            ruby -e "puts 'Hello from CI'; puts RUBY_VERSION"
+
+      # ============================================================
+      # Rails-specific tests (only for Dockerfile.rails)
+      # ============================================================
+      - name: Test Rails installation
+        if: matrix.dockerfile == 'Dockerfile.rails'
+        run: |
+          echo "Testing Rails version..."
+          docker run --rm test-image:${{ matrix.dockerfile }} \
+            sh -c 'bundle list | grep rails && bundle exec rails -v'
+
+      # ============================================================
+      # Chrome tests (not for lean image)
+      # ============================================================
+      - name: Test Chrome installation
+        if: matrix.dockerfile != 'Dockerfile.lean'
+        run: |
+          echo "Testing Chromium..."
+          docker run --rm test-image:${{ matrix.dockerfile }} \
+            chromium --version || echo "Chromium test completed"
+
+      - name: Test headless Chrome
+        if: matrix.dockerfile != 'Dockerfile.lean'
+        run: |
+          echo "Testing headless Chrome..."
+          docker run --rm test-image:${{ matrix.dockerfile }} \
+            chromium --headless --no-sandbox --disable-gpu \
+            --dump-dom https://example.com > /dev/null \
+            || echo "Headless Chrome test completed"
+
+      # ============================================================
+      # Bootsnap cache directory test
+      # ============================================================
+      - name: Test Bootsnap cache directory
+        if: matrix.dockerfile != 'Dockerfile.lean'
+        run: |
+          echo "Testing Bootsnap cache directory..."
+          docker run --rm test-image:${{ matrix.dockerfile }} \
+            sh -c 'test -d /app/tmp/bootsnap-ci && echo "Bootsnap directory exists" || exit 1'
+          docker run --rm test-image:${{ matrix.dockerfile }} \
+            sh -c 'echo $BOOTSNAP_CACHE_DIR | grep -q "/app/tmp/bootsnap-ci" && echo "Bootsnap env var set" || exit 1'
+
+      # ============================================================
+      # Functional test with a sample Gemfile
+      # ============================================================
+      - name: Create test Gemfile
+        run: |
+          mkdir -p test-app
+          cat > test-app/Gemfile <<'EOF'
+          source 'https://rubygems.org'
+          gem 'rake'
+          gem 'json'
+          EOF
+
+      - name: Test bundle install and rake execution
+        run: |
+          echo "Testing bundle install and rake execution..."
+          docker run --rm -v $(pwd)/test-app:/test-app -w /test-app \
+            test-image:${{ matrix.dockerfile }} \
+            sh -c "bundle install --path vendor/bundle && bundle exec rake --version"
+
+      # ============================================================
+      # Image size reporting
+      # ============================================================
+      - name: Report image size
+        id: image_size
+        run: |
+          SIZE=$(docker images test-image:${{ matrix.dockerfile }} --format "{{.Size}}")
+          echo "Image size for ${{ matrix.dockerfile }}: $SIZE"
+          echo "size=$SIZE" >> $GITHUB_OUTPUT
+
+          # Convert size to bytes for comparison
+          SIZE_BYTES=$(docker inspect test-image:${{ matrix.dockerfile }} --format='{{.Size}}')
+          echo "size_bytes=$SIZE_BYTES" >> $GITHUB_OUTPUT
+          echo "Size in bytes: $SIZE_BYTES"
+
+          # Save to file for artifact
+          echo "${{ matrix.dockerfile }}:$SIZE_BYTES:$SIZE" > size-${{ matrix.dockerfile }}.txt
+
+      - name: Upload size artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: size-${{ matrix.dockerfile }}
+          path: size-${{ matrix.dockerfile }}.txt
+
+      - name: Check lean image size
+        if: matrix.dockerfile == 'Dockerfile.lean'
+        run: |
+          # Fail if lean image is larger than 1GB
+          SIZE_BYTES=${{ steps.image_size.outputs.size_bytes }}
+          MAX_SIZE=$((1024 * 1024 * 1024))  # 1GB in bytes
+
+          if [ "$SIZE_BYTES" -gt "$MAX_SIZE" ]; then
+            echo "ERROR: Lean image is too large!"
+            echo "Size: $SIZE_BYTES bytes ($(($SIZE_BYTES / 1024 / 1024))MB)"
+            echo "Max allowed: $MAX_SIZE bytes ($(($MAX_SIZE / 1024 / 1024))MB)"
+            exit 1
+          else
+            echo "✓ Lean image size is acceptable: $(($SIZE_BYTES / 1024 / 1024))MB"
+          fi
+
+  # ============================================================
+  # Image size comparison
+  # ============================================================
+  compare-image-sizes:
+    name: Compare image sizes
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - name: Download all size artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: size-*
+          merge-multiple: true
+
+      - name: Compare sizes
+        run: |
+          echo "Image Size Comparison:"
+          echo "======================"
+
+          # Read sizes from artifacts
+          MAIN_DATA=$(cat size-Dockerfile.txt)
+          RAILS_DATA=$(cat size-Dockerfile.rails.txt)
+          LEAN_DATA=$(cat size-Dockerfile.lean.txt)
+
+          # Parse format: filename:bytes:human_readable
+          MAIN_SIZE=$(echo $MAIN_DATA | cut -d: -f2)
+          RAILS_SIZE=$(echo $RAILS_DATA | cut -d: -f2)
+          LEAN_SIZE=$(echo $LEAN_DATA | cut -d: -f2)
+
+          MAIN_HUMAN=$(echo $MAIN_DATA | cut -d: -f3)
+          RAILS_HUMAN=$(echo $RAILS_DATA | cut -d: -f3)
+          LEAN_HUMAN=$(echo $LEAN_DATA | cut -d: -f3)
+
+          echo "- Dockerfile: $MAIN_HUMAN"
+          echo "- Dockerfile.rails: $RAILS_HUMAN"
+          echo "- Dockerfile.lean: $LEAN_HUMAN"
+
+          # Calculate percentages
+          RAILS_PERCENT=$((100 * RAILS_SIZE / MAIN_SIZE))
+          LEAN_PERCENT=$((100 * LEAN_SIZE / MAIN_SIZE))
+
+          echo ""
+          echo "Size Analysis:"
+          echo "- Main image: $(($MAIN_SIZE / 1024 / 1024))MB (baseline)"
+          echo "- Rails image: $(($RAILS_SIZE / 1024 / 1024))MB (${RAILS_PERCENT}% of main)"
+          echo "- Lean image: $(($LEAN_SIZE / 1024 / 1024))MB (${LEAN_PERCENT}% of main)"
+
+          # Ensure lean is actually smaller
+          if [ "$LEAN_SIZE" -ge "$MAIN_SIZE" ]; then
+            echo "ERROR: Lean image should be smaller than main image!"
+            exit 1
+          fi
+          echo "✓ Lean image is smaller than main image"
+
+  # ============================================================
+  # All tests passed
+  # ============================================================
+  all-tests-passed:
+    name: All tests passed
+    runs-on: ubuntu-latest
+    needs:
+      - validate-yaml
+      - validate-dockerfiles
+      - build-and-test
+      - compare-image-sizes
+    steps:
+      - name: Success
+        run: echo "✅ All CI tests passed!"

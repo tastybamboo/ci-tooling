@@ -82,89 +82,40 @@ RUN useradd -m -s /bin/bash panda && \
     echo 'panda ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
 # -----------------------------------------------------------
-# Create temporary directory for Rails gem installation
+# Configure bundler and PATH before gem installation
 # -----------------------------------------------------------
-WORKDIR /tmp/gem-install
+ENV BUNDLE_PATH=/usr/local/bundle
+ENV BUNDLE_APP_CONFIG=/usr/local/bundle
+ENV PATH="/usr/local/bundle/bin:${PATH}"
+
+# -----------------------------------------------------------
+# Set environment variables
+# -----------------------------------------------------------
 ENV RAILS_VERSION=${RAILS_VERSION}
 ENV RUBY_VERSION=${RUBY_VERSION}
 
 # -----------------------------------------------------------
-# Build a Rails Gemfile tailored to the Rails version
+# Copy appropriate Gemfile based on Rails version
 # -----------------------------------------------------------
-RUN echo "source 'https://rubygems.org'" > Gemfile && \
-    echo "gem 'rails', '${RAILS_VERSION}'" >> Gemfile && \
-    echo "" >> Gemfile && \
-    echo "# Asset pipeline" >> Gemfile && \
-    case "${RAILS_VERSION}" in \
-      7.0.*) \
-        echo "gem 'propshaft', '~> 0.6.4'" >> Gemfile && \
-        echo "gem 'importmap-rails', '~> 1.2'" >> Gemfile && \
-        echo "gem 'turbo-rails', '~> 1.5'" >> Gemfile && \
-        echo "gem 'stimulus-rails', '~> 1.3'" >> Gemfile && \
-        echo "gem 'sqlite3', '~> 1.4'" >> Gemfile && \
-        echo "gem 'pg', '~> 1.1'" >> Gemfile && \
-        echo "gem 'puma', '~> 5.6'" >> Gemfile \
-        ;; \
-      7.1.*) \
-        echo "gem 'propshaft', '~> 0.8.0'" >> Gemfile && \
-        echo "gem 'importmap-rails', '~> 1.2'" >> Gemfile && \
-        echo "gem 'turbo-rails', '~> 1.5'" >> Gemfile && \
-        echo "gem 'stimulus-rails', '~> 1.3'" >> Gemfile && \
-        echo "gem 'sqlite3', '~> 1.4'" >> Gemfile && \
-        echo "gem 'pg', '~> 1.1'" >> Gemfile && \
-        echo "gem 'puma', '~> 6.0'" >> Gemfile \
-        ;; \
-      7.2.*) \
-        echo "gem 'propshaft', '~> 0.9.0'" >> Gemfile && \
-        echo "gem 'importmap-rails', '~> 2.0'" >> Gemfile && \
-        echo "gem 'turbo-rails', '~> 2.0'" >> Gemfile && \
-        echo "gem 'stimulus-rails', '~> 1.3'" >> Gemfile && \
-        echo "gem 'sqlite3', '>= 1.4'" >> Gemfile && \
-        echo "gem 'pg', '~> 1.1'" >> Gemfile && \
-        echo "gem 'puma', '~> 6.0'" >> Gemfile \
-        ;; \
-      8.0.*) \
-        echo "gem 'propshaft', '~> 1.0.0'" >> Gemfile && \
-        echo "gem 'importmap-rails', '~> 2.0'" >> Gemfile && \
-        echo "gem 'turbo-rails', '~> 2.0'" >> Gemfile && \
-        echo "gem 'stimulus-rails', '~> 1.3'" >> Gemfile && \
-        echo "gem 'sqlite3', '>= 2.0'" >> Gemfile && \
-        echo "gem 'pg', '~> 1.5'" >> Gemfile && \
-        echo "gem 'puma', '>= 5.0'" >> Gemfile \
-        ;; \
-      8.1.*) \
-        echo "gem 'propshaft', '~> 1.1.0'" >> Gemfile && \
-        echo "gem 'importmap-rails', '~> 2.0'" >> Gemfile && \
-        echo "gem 'turbo-rails', '~> 2.0'" >> Gemfile && \
-        echo "gem 'stimulus-rails', '~> 1.3'" >> Gemfile && \
-        echo "gem 'sqlite3', '>= 2.0'" >> Gemfile && \
-        echo "gem 'pg', '~> 1.5'" >> Gemfile && \
-        echo "gem 'puma', '>= 5.0'" >> Gemfile \
-        ;; \
-    esac && \
-    echo "" >> Gemfile && \
-    echo "# Testing gems" >> Gemfile && \
-    echo "gem 'rspec-rails'" >> Gemfile && \
-    echo "gem 'capybara'" >> Gemfile && \
-    echo "gem 'cuprite'" >> Gemfile && \
-    echo "gem 'database_cleaner-active_record'" >> Gemfile && \
-    echo "gem 'shoulda-matchers'" >> Gemfile && \
-    echo "gem 'simplecov'" >> Gemfile && \
-    echo "gem 'factory_bot_rails'" >> Gemfile && \
-    echo "" >> Gemfile && \
-    echo "# Code quality" >> Gemfile && \
-    echo "gem 'standard'" >> Gemfile && \
-    echo "gem 'erb_lint'" >> Gemfile && \
-    echo "gem 'brakeman'" >> Gemfile && \
-    echo "gem 'bundle-audit'" >> Gemfile
+# Parse major.minor version from full version (e.g., 7.2.2 -> 7.2)
+WORKDIR /app
+COPY gemfiles/Gemfile.rails-* /tmp/
+RUN RAILS_MAJOR_MINOR=$(echo ${RAILS_VERSION} | cut -d. -f1-2) && \
+    echo "Installing Rails ${RAILS_VERSION} (major.minor: ${RAILS_MAJOR_MINOR})" && \
+    cp /tmp/Gemfile.rails-${RAILS_MAJOR_MINOR} ./Gemfile || \
+    (echo "No Gemfile found for Rails ${RAILS_MAJOR_MINOR}" && exit 1) && \
+    rm -rf /tmp/Gemfile.rails-*
 
 # -----------------------------------------------------------
-# Install gems
+# Install gems from version-specific Gemfile
 # -----------------------------------------------------------
-RUN bundle config set --global without 'development' && \
-    bundle config set --global path '/usr/local/bundle' && \
-    bundle install --jobs 4 --retry 3 && \
-    rm -rf /tmp/gem-install
+RUN bundle install --jobs 4 --retry 3
+
+# Verify Rails is installed and accessible
+RUN echo "Rails version:" && \
+    bundle exec rails --version && \
+    echo "Installed gems:" && \
+    bundle list | grep -E "(rails|propshaft|turbo|stimulus)"
 
 # -----------------------------------------------------------
 # Working directory
@@ -193,9 +144,7 @@ LABEL org.opencontainers.image.description="Rails ${RAILS_VERSION} on Ruby ${RUB
 LABEL org.opencontainers.image.licenses="BSD-3-Clause"
 LABEL maintainer="Otaina Limited"
 
-# Bundler layer cache support inside CI image
-ENV BUNDLE_PATH=/usr/local/bundle
-ENV BUNDLE_APP_CONFIG=/usr/local/bundle
+# Final bundler configuration (ENV already set above)
 RUN bundle config set --global path "/usr/local/bundle"
 
 CMD ["/bin/bash"]
