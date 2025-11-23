@@ -95,22 +95,27 @@ ENV RAILS_VERSION=${RAILS_VERSION}
 ENV RUBY_VERSION=${RUBY_VERSION}
 
 # -----------------------------------------------------------
-# Install Rails and common testing gems directly
+# Copy appropriate Gemfile based on Rails version
 # -----------------------------------------------------------
-RUN gem install rails -v ${RAILS_VERSION} && \
-    gem install rspec-rails capybara cuprite selenium-webdriver && \
-    gem install database_cleaner-active_record shoulda-matchers && \
-    gem install simplecov factory_bot_rails && \
-    gem install standard rubocop rubocop-rails erb_lint && \
-    gem install brakeman bundle-audit && \
-    gem install pg sqlite3 puma
+# Parse major.minor version from full version (e.g., 7.2.2 -> 7.2)
+WORKDIR /app
+COPY gemfiles/Gemfile.rails-* /tmp/
+RUN RAILS_MAJOR_MINOR=$(echo ${RAILS_VERSION} | cut -d. -f1-2) && \
+    echo "Installing Rails ${RAILS_VERSION} (major.minor: ${RAILS_MAJOR_MINOR})" && \
+    cp /tmp/Gemfile.rails-${RAILS_MAJOR_MINOR} ./Gemfile || \
+    (echo "No Gemfile found for Rails ${RAILS_MAJOR_MINOR}" && exit 1) && \
+    rm -rf /tmp/Gemfile.rails-*
+
+# -----------------------------------------------------------
+# Install gems from version-specific Gemfile
+# -----------------------------------------------------------
+RUN bundle install --jobs 4 --retry 3
 
 # Verify Rails is installed and accessible
-RUN echo "PATH is: $PATH" && \
-    echo "Rails version:" && \
+RUN echo "Rails version:" && \
     rails --version && \
-    echo "Gem list:" && \
-    gem list | grep rails
+    echo "Installed gems:" && \
+    gem list | grep -E "(rails|propshaft|turbo|stimulus)"
 
 # -----------------------------------------------------------
 # Working directory
