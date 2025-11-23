@@ -107,12 +107,20 @@ RUN RAILS_MAJOR_MINOR=$(echo ${RAILS_VERSION} | cut -d. -f1-2) && \
     rm -rf /tmp/Gemfile.rails-*
 
 # -----------------------------------------------------------
-# Install gems from version-specific Gemfile
+# Install Rails directly via gem first
+# -----------------------------------------------------------
+# Install Rails directly so it's available globally without bundle exec
+RUN gem install rails -v ${RAILS_VERSION}
+
+# -----------------------------------------------------------
+# Install other gems from version-specific Gemfile
 # -----------------------------------------------------------
 RUN bundle install --jobs 4 --retry 3
 
-# Verify Rails is installed and accessible
-RUN echo "Rails version:" && \
+# Verify Rails is installed and accessible (both ways)
+RUN echo "Rails version (direct):" && \
+    rails --version && \
+    echo "Rails version (bundled):" && \
     bundle exec rails --version && \
     echo "Installed gems:" && \
     bundle list | grep -E "(rails|propshaft|turbo|stimulus)"
