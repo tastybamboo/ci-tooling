@@ -170,14 +170,20 @@ RUN echo "source 'https://rubygems.org'" > Gemfile && \
 # -----------------------------------------------------------
 RUN bundle config set --global without 'development' && \
     bundle config set --global path '/usr/local/bundle' && \
-    bundle install --jobs 4 --retry 3 || \
+    bundle config set --global bin '/usr/local/bundle/bin' && \
+    bundle install --jobs 4 --retry 3 --binstubs=/usr/local/bundle/bin || \
     (echo "Bundle install failed. Gemfile contents:" && cat Gemfile && exit 1)
 
 # Verify Rails is installed and accessible
-RUN gem list | grep rails && \
-    which rails && \
-    rails --version || \
-    (echo "WARNING: Rails verification failed but continuing build" && true)
+RUN echo "PATH is: $PATH" && \
+    echo "Contents of /usr/local/bundle/bin:" && \
+    ls -la /usr/local/bundle/bin/ || echo "Directory doesn't exist" && \
+    echo "Gem list for rails:" && \
+    gem list | grep rails || echo "Rails gem not found" && \
+    echo "Which rails:" && \
+    which rails || echo "Rails not in PATH" && \
+    echo "Try bundle exec rails:" && \
+    bundle exec rails --version || echo "Bundle exec rails failed"
 
 # Clean up
 RUN cd / && rm -rf /tmp/gem-install
