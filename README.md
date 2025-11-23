@@ -276,6 +276,35 @@ DATABASE_URL: postgresql://postgres:password@postgres/test
 ### Image not found
 The images are public, but ensure you're using the correct registry URL: `ghcr.io/tastybamboo/panda-ci`
 
+## 🛠️ Development
+
+### CI/CD
+
+This repository includes comprehensive CI validation:
+
+- **Pull Request CI**: Automatic validation of YAML, Dockerfiles, and image builds
+- **Local Git Hooks**: Pre-commit and pre-push validation with Lefthook
+
+See [docs/CI.md](docs/CI.md) for full CI documentation.
+
+### Setting Up Development Environment
+
+1. **Install Git Hooks** (recommended):
+   ```bash
+   ./bin/setup-hooks
+   ```
+   This installs Lefthook for automatic pre-commit and pre-push validation.
+
+2. **Run Local Validation**:
+   ```bash
+   # Validate YAML files
+   yamllint -c .yamllint .
+
+   # Build and test images locally
+   docker build -f Dockerfile -t test:main .
+   docker run --rm test:main ruby -v
+   ```
+
 ## 📝 License
 
 Copyright 2024-2025 Otaina Limited. Available under the BSD 3-Clause License.

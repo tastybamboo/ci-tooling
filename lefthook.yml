@@ -1,0 +1,102 @@
+---
+# Lefthook configuration for ci-tooling
+# https://github.com/evilmartians/lefthook
+
+# Skip these hooks in CI environment
+skip_in_ci: true
+
+# Hooks configuration
+pre-commit:
+  parallel: true
+  commands:
+    yamllint:
+      glob: "**/*.{yml,yaml}"
+      run: yamllint -c .yamllint {staged_files}
+      skip:
+        - merge
+        - rebase
+
+    check-dockerfiles:
+      glob: "**/Dockerfile*"
+      run: |
+        echo "Checking Dockerfiles for common issues..."
+        for file in {staged_files}; do
+          echo "Checking $file..."
+          # Check for consistent line endings
+          if grep -q $'\r' "$file"; then
+            echo "ERROR: $file contains Windows line endings"
+            exit 1
+          fi
+          # Check that LABEL maintainer exists
+          if ! grep -q "LABEL maintainer=" "$file"; then
+            echo "WARNING: $file missing maintainer label"
+          fi
+        done
+      skip:
+        - merge
+        - rebase
+
+    check-whitespace:
+      run: git diff --check --cached
+      skip:
+        - merge
+        - rebase
+
+pre-push:
+  parallel: false
+  commands:
+    validate-branch:
+      run: |
+        BRANCH=$(git rev-parse --abbrev-ref HEAD)
+        if [[ "$BRANCH" == "main" ]]; then
+          echo "Direct push to main branch is not allowed!"
+          echo "Please create a feature branch and PR"
+          exit 1
+        fi
+
+    yamllint-all:
+      run: yamllint -c .yamllint .
+      skip:
+        - merge
+        - rebase
+
+    dockerfile-syntax:
+      run: |
+        echo "Validating Dockerfile syntax..."
+        for dockerfile in Dockerfile*; do
+          if [[ -f "$dockerfile" ]]; then
+            echo "Checking $dockerfile..."
+            docker build --no-cache -f "$dockerfile" --target=base . 2>/dev/null || \
+            docker build --no-cache -f "$dockerfile" . --dry-run 2>/dev/null || \
+            echo "Note: Full validation will run in CI"
+          fi
+        done
+      skip:
+        - merge
+        - rebase
+
+post-checkout:
+  commands:
+    remind-setup:
+      run: |
+        if [[ ! -f .lefthook/lock.yml ]]; then
+          echo ""
+          echo "📝 Remember to install Lefthook hooks:"
+          echo "   lefthook install"
+          echo ""
+        fi
+
+post-merge:
+  commands:
+    lefthook-update:
+      run: |
+        if [[ -f lefthook.yml ]]; then
+          echo "Updating Lefthook hooks after merge..."
+          lefthook install
+        fi
+
+# Settings
+colors: true
+no_tty: false
+source_dir: .
+source_dir_local: .lefthook-local
