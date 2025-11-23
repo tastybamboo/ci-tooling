@@ -19,7 +19,7 @@ ENV TZ=UTC
 # -----------------------------------------------------------
 # System packages (multi-arch compatible)
 # -----------------------------------------------------------
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     wget \
@@ -170,6 +170,14 @@ RUN bundle config set --global without 'development' && \
 # Working directory
 # -----------------------------------------------------------
 WORKDIR /app
+
+# -----------------------------------------------------------
+# Bootsnap cache directory for CI
+# -----------------------------------------------------------
+# Bootsnap speeds up Ruby boot time by caching expensive operations
+# Setting a CI-specific directory prevents cache conflicts between builds
+RUN mkdir -p /app/tmp/bootsnap-ci
+ENV BOOTSNAP_CACHE_DIR=/app/tmp/bootsnap-ci
 
 # -----------------------------------------------------------
 # Healthcheck

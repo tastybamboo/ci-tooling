@@ -12,7 +12,7 @@ ENV TZ=UTC
 # -----------------------------------------------------------
 # System packages (multi-arch friendly + Chromium compatible)
 # -----------------------------------------------------------
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
   build-essential \
   curl \
   wget \
@@ -98,10 +98,13 @@ RUN gem install \
   pg
 
 # -----------------------------------------------------------
-# Pre-create directories
+# Pre-create directories and Bootsnap cache
 # -----------------------------------------------------------
-RUN mkdir -p /app /tmp/cache
+# Bootsnap speeds up Ruby boot time by caching expensive operations
+# Setting a CI-specific directory prevents cache conflicts between builds
+RUN mkdir -p /app /tmp/cache /app/tmp/bootsnap-ci
 WORKDIR /app
+ENV BOOTSNAP_CACHE_DIR=/app/tmp/bootsnap-ci
 
 # -----------------------------------------------------------
 # Health check

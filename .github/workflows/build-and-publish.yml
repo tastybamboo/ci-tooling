@@ -17,9 +17,9 @@ on:
   workflow_dispatch:
     inputs:
       ruby_versions:
-        description: 'Ruby versions to build (comma-separated, e.g., "3.2.9,3.3.10,3.4.7")'
+        description: 'Ruby versions to build (JSON array, e.g., ["3.2.9","3.3.10","3.4.7"])'
         required: false
-        default: '3.2.9,3.3.10,3.4.7'
+        default: '["3.2.9","3.3.10","3.4.7"]'
       platforms:
         description: 'Platforms to build for'
         required: false
@@ -44,7 +44,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        ruby-version: ${{ fromJson(github.event.inputs.ruby_versions && format('["{0}"]', join(split(github.event.inputs.ruby_versions, ','), '", "')) || '["3.2.9", "3.3.10", "3.4.7"]') }}
+        ruby-version: ${{ fromJson(github.event.inputs.ruby_versions || '["3.2.9", "3.3.10", "3.4.7"]') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

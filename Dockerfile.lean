@@ -13,7 +13,7 @@ ENV TZ=UTC
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Install only essential system dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
   # Build essentials
   build-essential \
   git \
@@ -25,26 +25,16 @@ RUN apt-get update && apt-get install -y \
   # SQLite (for sqlite3 gem)
   sqlite3 \
   libsqlite3-dev \
-  # Image processing (commonly needed)
-  libvips42 \
-  imagemagick \
-  libmagickwand-dev \
-  # For Nokogiri
+  # For Nokogiri (commonly required)
   libxml2-dev \
   libxslt1-dev \
   # For psych gem (YAML parsing)
   libyaml-dev \
   # For rbnacl gem (used by JWT/OAuth)
   libsodium-dev \
-  # Browser testing dependencies
-  chromium \
-  chromium-driver \
-  xvfb \
   # Utilities
   sudo \
   locales \
-  # YAML linting (for CI checks)
-  yamllint \
   # Clean up
   && rm -rf /var/lib/apt/lists/* \
   && apt-get clean
@@ -56,17 +46,6 @@ RUN locale-gen en_US.UTF-8
 ENV LANG=en_US.UTF-8 \
     LANGUAGE=en_US:en \
     LC_ALL=en_US.UTF-8
-
-# -----------------------------------------------------------
-# Chromium settings
-# -----------------------------------------------------------
-ENV CHROME_BIN=/usr/bin/chromium
-ENV CHROMIUM_FLAGS="--no-sandbox --headless --disable-gpu --disable-dev-shm-usage --disable-software-rasterizer --disable-extensions --disable-background-networking --metrics-recording-only --mute-audio"
-
-# Pre-warm Chromium (non-fatal)
-RUN chromium --headless --no-sandbox --disable-gpu \
-    --print-to-pdf=/tmp/test.pdf about:blank && rm /tmp/test.pdf \
-    || echo "Chromium warmup skipped"
 
 # -----------------------------------------------------------
 # Install Bundler (always latest)
