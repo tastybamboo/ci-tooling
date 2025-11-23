@@ -1,0 +1,96 @@
+# Panda CI Docker Image (Lean Version for Matrix Testing)
+# Provides minimal environment optimized for matrix testing with different Rails versions
+
+ARG RUBY_VERSION=3.3
+
+FROM ruby:${RUBY_VERSION}-slim
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Set timezone to UTC
+ENV TZ=UTC
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# Install only essential system dependencies
+RUN apt-get update && apt-get install -y \
+  # Build essentials
+  build-essential \
+  git \
+  curl \
+  wget \
+  # PostgreSQL client (for pg gem)
+  postgresql-client \
+  libpq-dev \
+  # SQLite (for sqlite3 gem)
+  sqlite3 \
+  libsqlite3-dev \
+  # Image processing (commonly needed)
+  libvips42 \
+  imagemagick \
+  libmagickwand-dev \
+  # For Nokogiri
+  libxml2-dev \
+  libxslt1-dev \
+  # For psych gem (YAML parsing)
+  libyaml-dev \
+  # For rbnacl gem (used by JWT/OAuth)
+  libsodium-dev \
+  # Browser testing dependencies
+  chromium \
+  chromium-driver \
+  xvfb \
+  # Utilities
+  sudo \
+  locales \
+  # YAML linting (for CI checks)
+  yamllint \
+  # Clean up
+  && rm -rf /var/lib/apt/lists/* \
+  && apt-get clean
+
+# Generate locale
+RUN locale-gen en_US.UTF-8
+ENV LANG=en_US.UTF-8
+ENV LANGUAGE=en_US:en
+ENV LC_ALL=en_US.UTF-8
+
+# Configure Chromium for headless operation
+ENV CHROME_BIN=/usr/bin/chromium
+ENV CHROMIUM_FLAGS="--no-sandbox --headless --disable-gpu --disable-dev-shm-usage --disable-software-rasterizer --disable-extensions --disable-background-networking --metrics-recording-only --mute-audio"
+
+# Pre-warm Chrome to speed up first test execution
+RUN chromium --headless --no-sandbox --disable-gpu --print-to-pdf=/tmp/test.pdf about:blank && \
+    rm /tmp/test.pdf
+
+# Install specific bundler version that matches your Gemfile.lock
+RUN gem install bundler:2.5.23
+
+# Create a non-root user for running tests (optional but recommended)
+RUN useradd -m -s /bin/bash panda && \
+  echo 'panda ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+
+# Only install minimal gems that are always needed
+# Don't pre-install Rails or test gems - let matrix testing handle versions
+RUN gem install \
+  rake \
+  bundler-audit
+
+# Pre-create common directories
+RUN mkdir -p /app /tmp/cache
+
+# Set working directory
+WORKDIR /app
+
+# Add a health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD ruby -v || exit 1
+
+# Labels for GitHub Container Registry
+LABEL org.opencontainers.image.source="https://github.com/tastybamboo/panda-ci"
+LABEL org.opencontainers.image.description="Lean CI environment for Panda matrix testing"
+LABEL org.opencontainers.image.licenses="BSD-3-Clause"
+LABEL maintainer="Otaina Limited"
+
+# Default command
+CMD ["/bin/bash"]

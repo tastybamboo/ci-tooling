@@ -73,11 +73,14 @@ jobs:
             rails: '8.0.4'
           - ruby: '3.4'
             rails: '8.1.1'
-            latest: true  # This is the absolute latest
+            latest: true # This is the absolute latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -102,6 +105,7 @@ jobs:
           context: .
           file: Dockerfile.rails
           push: ${{ github.event_name != 'pull_request' }}
+          platforms: linux/amd64,linux/arm64
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ruby-${{ matrix.ruby }}-rails-${{ matrix.rails }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ruby-${{ matrix.ruby }}-rails-${{ steps.version.outputs.rails_mm }}
@@ -110,7 +114,6 @@ jobs:
             RAILS_VERSION=${{ matrix.rails }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64
 
       - name: Tag as latest for series
         if: github.event_name != 'pull_request'

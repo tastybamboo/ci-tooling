@@ -1,0 +1,74 @@
+---
+name: Build All Docker Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_ruby_images:
+        description: 'Build Ruby base images'
+        required: false
+        default: true
+        type: boolean
+      build_rails_images:
+        description: 'Build Rails-specific images'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  trigger-builds:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Ruby image builds
+        if: inputs.build_ruby_images == true
+        run: |
+          echo "Triggering Ruby base image builds..."
+          curl -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/build-and-publish.yml/dispatches \
+            -d '{"ref":"main"}'
+
+          echo "✅ Ruby image builds triggered"
+
+      - name: Wait before triggering Rails builds
+        if: inputs.build_ruby_images == true && inputs.build_rails_images == true
+        run: |
+          echo "Waiting 10 seconds before triggering Rails builds..."
+          sleep 10
+
+      - name: Trigger Rails image builds
+        if: inputs.build_rails_images == true
+        run: |
+          echo "Triggering Rails-specific image builds..."
+          curl -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/build-rails-images.yml/dispatches \
+            -d '{"ref":"main"}'
+
+          echo "✅ Rails image builds triggered"
+
+      - name: Summary
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ inputs.build_ruby_images }}" = "true" ]; then
+            echo "✅ Ruby base images build triggered" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏭️ Ruby base images build skipped" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ inputs.build_rails_images }}" = "true" ]; then
+            echo "✅ Rails-specific images build triggered" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏭️ Rails-specific images build skipped" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Check the [Actions tab](https://github.com/${{ github.repository }}/actions) to monitor build progress." >> $GITHUB_STEP_SUMMARY

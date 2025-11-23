@@ -1,95 +1,93 @@
+# syntax=docker/dockerfile:1.4
+#
 # Panda CI Docker Image
-# Provides a pre-configured environment for running Panda project CI/CD pipelines
+# Multi-arch (AMD64 + ARM64) compatible
 
-ARG RUBY_VERSION=3.3
-
+ARG RUBY_VERSION=3.4
 FROM ruby:${RUBY_VERSION}-slim
 
-# Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
-
-# Set timezone to UTC
 ENV TZ=UTC
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-# Install system dependencies
+# -----------------------------------------------------------
+# System packages (multi-arch friendly + Chromium compatible)
+# -----------------------------------------------------------
 RUN apt-get update && apt-get install -y \
-  # Build essentials
   build-essential \
-  git \
   curl \
   wget \
-  # PostgreSQL client
+  git \
+  sudo \
+  locales \
+  tzdata \
+  # PostgreSQL
   postgresql-client \
+  libpq-dev \
   # Image processing
   libvips42 \
   imagemagick \
   libmagickwand-dev \
-  # For Nokogiri
+  # Nokogiri deps
   libxml2-dev \
   libxslt1-dev \
-  # For pg gem
-  libpq-dev \
-  # For psych gem (YAML parsing)
+  # YAML / rbnacl
   libyaml-dev \
-  # For rbnacl gem (used by JWT/OAuth)
   libsodium-dev \
-  # Browser testing dependencies
+  # Browser testing + dependencies
   chromium \
   chromium-driver \
   xvfb \
-  # Additional utilities
-  sudo \
-  locales \
-  # YAML linting
+  # Linters
   yamllint \
-  # Clean up
-  && rm -rf /var/lib/apt/lists/* \
-  && apt-get clean
+  && rm -rf /var/lib/apt/lists/*
 
-# Generate locale
+# -----------------------------------------------------------
+# Locale
+# -----------------------------------------------------------
 RUN locale-gen en_US.UTF-8
-ENV LANG=en_US.UTF-8
-ENV LANGUAGE=en_US:en
-ENV LC_ALL=en_US.UTF-8
+ENV LANG=en_US.UTF-8 \
+  LANGUAGE=en_US:en \
+  LC_ALL=en_US.UTF-8
 
-# Configure Chromium for headless operation with optimized flags
+# -----------------------------------------------------------
+# Chromium environment
+# -----------------------------------------------------------
 ENV CHROME_BIN=/usr/bin/chromium
 ENV CHROMIUM_FLAGS="--no-sandbox --headless --disable-gpu --disable-dev-shm-usage --disable-software-rasterizer --disable-extensions --disable-background-networking --metrics-recording-only --mute-audio"
 
-# Pre-warm Chrome to speed up first test execution
-RUN chromium --headless --no-sandbox --disable-gpu --print-to-pdf=/tmp/test.pdf about:blank && \
-    rm /tmp/test.pdf
+# -----------------------------------------------------------
+# Pre-warm Chromium (non-fatal)
+# -----------------------------------------------------------
+RUN chromium --headless --no-sandbox --disable-gpu \
+  --print-to-pdf=/tmp/test.pdf about:blank && rm /tmp/test.pdf \
+  || echo "Chromium warmup skipped"
 
-# Install specific bundler version that matches your Gemfile.lock
-RUN gem install bundler:2.7.2
+# -----------------------------------------------------------
+# Install Bundler (always latest)
+# -----------------------------------------------------------
+RUN gem update --system && gem install bundler
 
-# Create a non-root user for running tests (optional but recommended)
+# -----------------------------------------------------------
+# Create non-root user
+# -----------------------------------------------------------
 RUN useradd -m -s /bin/bash panda && \
   echo 'panda ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
-# Set up common Ruby gems that are used across all projects
-# This speeds up bundle install in CI
-
-# Testing & CI tools
+# -----------------------------------------------------------
+# Pre-install common CI gems
+# -----------------------------------------------------------
 RUN gem install \
   rake \
   rspec \
   rspec-rails \
-  parallel_tests
-
-# Code quality & linting
-RUN gem install \
+  parallel_tests \
   standard \
   rubocop \
   rubocop-rails \
   rubocop-rspec \
   erb_lint \
   brakeman \
-  bundle-audit
-
-# Commonly used application dependencies
-RUN gem install \
+  bundle-audit \
   rails-controller-testing \
   capybara \
   cuprite \
@@ -99,21 +97,24 @@ RUN gem install \
   simplecov-json \
   pg
 
-# Pre-create common directories
+# -----------------------------------------------------------
+# Pre-create directories
+# -----------------------------------------------------------
 RUN mkdir -p /app /tmp/cache
-
-# Set working directory
 WORKDIR /app
 
-# Add a health check
+# -----------------------------------------------------------
+# Health check
+# -----------------------------------------------------------
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD ruby -v || exit 1
 
-# Labels for GitHub Container Registry
+# -----------------------------------------------------------
+# Labels
+# -----------------------------------------------------------
 LABEL org.opencontainers.image.source="https://github.com/tastybamboo/panda-ci"
 LABEL org.opencontainers.image.description="CI/CD environment for Panda projects"
 LABEL org.opencontainers.image.licenses="BSD-3-Clause"
 LABEL maintainer="Otaina Limited"
 
-# Default command
 CMD ["/bin/bash"]

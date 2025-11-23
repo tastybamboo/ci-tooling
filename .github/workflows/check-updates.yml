@@ -29,6 +29,16 @@ jobs:
       - name: Check for Ruby and Bundler updates
         id: check
         run: |
+          # Load configuration
+          RUBY_MIN_VERSION=$(jq -r '.ruby.minimum_supported_version' version-config.json | cut -d. -f1,2)
+          RUBY_STABLE_MAJOR=$(jq -r '.ruby.current_stable_major_version' version-config.json)
+          EXPERIMENTAL_SUFFIXES=$(jq -r '.ruby.experimental_suffixes | join("|")' version-config.json)
+
+          echo "Configuration loaded:"
+          echo "  Minimum Ruby version: $RUBY_MIN_VERSION"
+          echo "  Current stable major: $RUBY_STABLE_MAJOR"
+          echo "  Experimental suffixes: $EXPERIMENTAL_SUFFIXES"
+
           # Get current Ruby versions from the workflow
           CURRENT_RUBY_VERSIONS=$(grep -E '^\s*ruby-version:.*\[' .github/workflows/build-and-publish.yml | head -1 | sed 's/.*\[\(.*\)\].*/\1/' | sed 's/"//g' | tr ',' ' ')
           echo "Current Ruby versions: $CURRENT_RUBY_VERSIONS"
@@ -42,14 +52,76 @@ jobs:
 
           # Download the Ruby index file
           curl -s https://cache.ruby-lang.org/pub/ruby/index.txt > ruby_index.txt
-          # Find latest patch versions for each minor version we care about
-          LATEST_32=$(grep -E 'ruby-3\.2\.[0-9]+\.tar\.gz' ruby_index.txt | sed 's/.*ruby-\(3\.2\.[0-9]*\)\.tar\.gz.*/\1/' | sort -V | tail -1)
-          LATEST_33=$(grep -E 'ruby-3\.3\.[0-9]+\.tar\.gz' ruby_index.txt | sed 's/.*ruby-\(3\.3\.[0-9]*\)\.tar\.gz.*/\1/' | sort -V | tail -1)
-          LATEST_34=$(grep -E 'ruby-3\.4\.[0-9]+\.tar\.gz' ruby_index.txt | sed 's/.*ruby-\(3\.4\.[0-9]*\)\.tar\.gz.*/\1/' | sort -V | tail -1)
 
-          echo "Latest Ruby 3.2: $LATEST_32"
-          echo "Latest Ruby 3.3: $LATEST_33"
-          echo "Latest Ruby 3.4: $LATEST_34"
+          # Dynamically discover all available Ruby minor versions (stable and preview)
+          echo "Discovering all available Ruby minor versions..."
+
+          # Find all Ruby versions in format X.Y.Z or X.Y.Z-previewN/rcN/etc
+          ALL_VERSIONS=$(grep -E 'ruby-[0-9]+\.[0-9]+\.[0-9]+.*\.tar\.gz' ruby_index.txt | \
+            sed 's/.*ruby-\([0-9]\+\.[0-9]\+\.[0-9]\+[^.]*\)\.tar\.gz.*/\1/' | \
+            sort -V | uniq)
+
+          # Extract unique minor versions (X.Y) and find latest patch for each
+          MINOR_VERSIONS=$(echo "$ALL_VERSIONS" | sed 's/\([0-9]\+\.[0-9]\+\)\..*/\1/' | sort -V | uniq)
+
+          echo "All discovered minor versions: $MINOR_VERSIONS"
+
+          # Filter by minimum supported version and build version list
+          SUPPORTED_VERSIONS=""
+          EXPERIMENTAL_VERSIONS=""
+
+          # Convert min version to comparable number (e.g., 3.2 -> 302)
+          MIN_VER_NUM=$(echo $RUBY_MIN_VERSION | awk -F. '{printf "%d%02d", $1, $2}')
+
+          for minor in $MINOR_VERSIONS; do
+            # Convert current version to comparable number
+            VER_NUM=$(echo $minor | awk -F. '{printf "%d%02d", $1, $2}')
+            MAJOR=$(echo $minor | cut -d. -f1)
+
+            # Skip if below minimum supported version
+            if [ $VER_NUM -lt $MIN_VER_NUM ]; then
+              echo "Skipping Ruby $minor (below minimum $RUBY_MIN_VERSION)"
+              continue
+            fi
+
+            # Find latest stable version for this minor
+            latest_stable=$(echo "$ALL_VERSIONS" | grep -E "^${minor}\.[0-9]+$" | sort -V | tail -1)
+
+            # Find latest preview/rc version for this minor
+            latest_preview=$(echo "$ALL_VERSIONS" | grep -E "^${minor}\.[0-9]+-($EXPERIMENTAL_SUFFIXES)" | sort -V | tail -1)
+
+            # Determine which version to use and its status
+            version=""
+            is_experimental=false
+
+            if [ -n "$latest_stable" ]; then
+              version=$latest_stable
+              # Check if major version indicates experimental
+              if [ $MAJOR -gt $RUBY_STABLE_MAJOR ]; then
+                is_experimental=true
+              fi
+            elif [ -n "$latest_preview" ]; then
+              version=$latest_preview
+              is_experimental=true
+            fi
+
+            if [ -n "$version" ]; then
+              SUPPORTED_VERSIONS="$SUPPORTED_VERSIONS $version"
+              if [ "$is_experimental" = true ]; then
+                EXPERIMENTAL_VERSIONS="$EXPERIMENTAL_VERSIONS $version"
+                echo "Ruby $minor: $version (experimental)"
+              else
+                echo "Ruby $minor: $version (stable)"
+              fi
+            fi
+          done
+
+          # Clean up whitespace
+          SUPPORTED_VERSIONS=$(echo $SUPPORTED_VERSIONS | xargs)
+          EXPERIMENTAL_VERSIONS=$(echo $EXPERIMENTAL_VERSIONS | xargs)
+
+          echo "Supported versions: $SUPPORTED_VERSIONS"
+          echo "Experimental versions: $EXPERIMENTAL_VERSIONS"
 
           # Fetch latest Bundler version from RubyGems API
           echo "Fetching latest Bundler version..."
@@ -59,35 +131,36 @@ jobs:
           # Check if updates are needed
           UPDATES_NEEDED=false
           UPDATE_MESSAGE=""
+          NEW_VERSIONS=""
 
-          # Extract current versions for comparison
-          CURRENT_32=$(echo "$CURRENT_RUBY_VERSIONS" | grep -o '3\.2\.[0-9]*' | head -1)
-          CURRENT_33=$(echo "$CURRENT_RUBY_VERSIONS" | grep -o '3\.3\.[0-9]*' | head -1)
-          CURRENT_34=$(echo "$CURRENT_RUBY_VERSIONS" | grep -o '3\.4\.[0-9]*' | head -1)
-
-          # Check Ruby 3.2
-          if [ -n "$LATEST_32" ] && [ "$CURRENT_32" != "$LATEST_32" ]; then
-            UPDATES_NEEDED=true
-            UPDATE_MESSAGE="${UPDATE_MESSAGE}- Ruby 3.2: $CURRENT_32 → $LATEST_32\n"
-          fi
-
-          # Check Ruby 3.3
-          if [ -n "$LATEST_33" ] && [ "$CURRENT_33" != "$LATEST_33" ]; then
-            UPDATES_NEEDED=true
-            UPDATE_MESSAGE="${UPDATE_MESSAGE}- Ruby 3.3: $CURRENT_33 → $LATEST_33\n"
-          fi
-
-          # Check Ruby 3.4 (only if it exists)
-          if [ -n "$LATEST_34" ]; then
-            if [ -z "$CURRENT_34" ]; then
-              # New minor version available
+          # Compare discovered versions with current versions
+          for version in $SUPPORTED_VERSIONS; do
+            if ! echo "$CURRENT_RUBY_VERSIONS" | grep -q "$version"; then
               UPDATES_NEEDED=true
-              UPDATE_MESSAGE="${UPDATE_MESSAGE}- Ruby 3.4: new version available → $LATEST_34\n"
-            elif [ "$CURRENT_34" != "$LATEST_34" ]; then
-              UPDATES_NEEDED=true
-              UPDATE_MESSAGE="${UPDATE_MESSAGE}- Ruby 3.4: $CURRENT_34 → $LATEST_34\n"
+
+              # Check if this is a new minor version
+              minor=$(echo $version | cut -d. -f1,2)
+              if ! echo "$CURRENT_RUBY_VERSIONS" | grep -q "$minor"; then
+                NEW_VERSIONS="$NEW_VERSIONS $version"
+                if echo "$EXPERIMENTAL_VERSIONS" | grep -q "$version"; then
+                  UPDATE_MESSAGE="${UPDATE_MESSAGE}- Ruby $minor: new version available → $version (experimental)\n"
+                else
+                  UPDATE_MESSAGE="${UPDATE_MESSAGE}- Ruby $minor: new version available → $version\n"
+                fi
+              else
+                # Patch version update
+                current=$(echo "$CURRENT_RUBY_VERSIONS" | grep -o "${minor}\.[0-9.-]*" | head -1)
+                if echo "$EXPERIMENTAL_VERSIONS" | grep -q "$version"; then
+                  UPDATE_MESSAGE="${UPDATE_MESSAGE}- Ruby $minor: $current → $version (experimental)\n"
+                else
+                  UPDATE_MESSAGE="${UPDATE_MESSAGE}- Ruby $minor: $current → $version\n"
+                fi
+              fi
             fi
-          fi
+          done
+
+          # Clean up NEW_VERSIONS
+          NEW_VERSIONS=$(echo $NEW_VERSIONS | xargs)
 
           # Check Bundler version
           if [ -n "$LATEST_BUNDLER" ] && [ "$CURRENT_BUNDLER" != "$LATEST_BUNDLER" ]; then
@@ -106,61 +179,81 @@ jobs:
             fi
           fi
 
+          # Determine update types for conditional logic
+          BUNDLER_ONLY=false
+          RUBY_UPDATED=false
+          NEW_RUBY_MINOR=false
+
+          # Check if only Bundler changed
+          if [ -n "$LATEST_BUNDLER" ] && [ "$CURRENT_BUNDLER" != "$LATEST_BUNDLER" ]; then
+            if [ -z "$NEW_VERSIONS" ] && [ $(echo "$SUPPORTED_VERSIONS" | wc -w) -eq $(echo "$CURRENT_RUBY_VERSIONS" | wc -w) ]; then
+              BUNDLER_ONLY=true
+            fi
+          fi
+
+          # Check if Ruby versions were updated
+          if [ -n "$NEW_VERSIONS" ] || [ $(echo "$SUPPORTED_VERSIONS" | wc -w) -ne $(echo "$CURRENT_RUBY_VERSIONS" | wc -w) ]; then
+            RUBY_UPDATED=true
+          fi
+
+          # Check for new Ruby minor version
+          if [ -n "$NEW_VERSIONS" ]; then
+            NEW_RUBY_MINOR=true
+          fi
+
           # Save results
           echo "UPDATES_NEEDED=$UPDATES_NEEDED" >> $GITHUB_OUTPUT
           echo "UPDATE_MESSAGE<<EOF" >> $GITHUB_OUTPUT
           echo -e "$UPDATE_MESSAGE" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-          echo "LATEST_32=$LATEST_32" >> $GITHUB_OUTPUT
-          echo "LATEST_33=$LATEST_33" >> $GITHUB_OUTPUT
-          echo "LATEST_34=$LATEST_34" >> $GITHUB_OUTPUT
+          echo "SUPPORTED_VERSIONS=$SUPPORTED_VERSIONS" >> $GITHUB_OUTPUT
+          echo "EXPERIMENTAL_VERSIONS=$EXPERIMENTAL_VERSIONS" >> $GITHUB_OUTPUT
+          echo "NEW_VERSIONS=$NEW_VERSIONS" >> $GITHUB_OUTPUT
           echo "LATEST_BUNDLER=$LATEST_BUNDLER" >> $GITHUB_OUTPUT
+          echo "BUNDLER_ONLY=$BUNDLER_ONLY" >> $GITHUB_OUTPUT
+          echo "RUBY_UPDATED=$RUBY_UPDATED" >> $GITHUB_OUTPUT
+          echo "NEW_RUBY_MINOR=$NEW_RUBY_MINOR" >> $GITHUB_OUTPUT
 
       - name: Update files if needed
         if: steps.check.outputs.UPDATES_NEEDED == 'true'
         run: |
-          # Update Ruby versions in build-and-publish.yml
-          LATEST_32="${{ steps.check.outputs.LATEST_32 }}"
-          LATEST_33="${{ steps.check.outputs.LATEST_33 }}"
-          LATEST_34="${{ steps.check.outputs.LATEST_34 }}"
+          # Get discovered versions
+          SUPPORTED_VERSIONS="${{ steps.check.outputs.SUPPORTED_VERSIONS }}"
+          EXPERIMENTAL_VERSIONS="${{ steps.check.outputs.EXPERIMENTAL_VERSIONS }}"
           LATEST_BUNDLER="${{ steps.check.outputs.LATEST_BUNDLER }}"
 
-          # Build the Ruby versions array and CSV string (in order: 3.2, 3.3, 3.4)
+          # Build the Ruby versions array and CSV string
           RUBY_ARRAY=""
           RUBY_CSV=""
-          if [ -n "$LATEST_32" ]; then
-            RUBY_ARRAY="\"$LATEST_32\""
-            RUBY_CSV="$LATEST_32"
-          fi
+          FIRST=true
 
-          if [ -n "$LATEST_33" ]; then
-            if [ -n "$RUBY_ARRAY" ]; then
-              RUBY_ARRAY="$RUBY_ARRAY, \"$LATEST_33\""
-              RUBY_CSV="$RUBY_CSV,$LATEST_33"
+          for version in $SUPPORTED_VERSIONS; do
+            if [ "$FIRST" = true ]; then
+              RUBY_ARRAY="\"$version\""
+              RUBY_CSV="$version"
+              FIRST=false
             else
-              RUBY_ARRAY="\"$LATEST_33\""
-              RUBY_CSV="$LATEST_33"
+              RUBY_ARRAY="$RUBY_ARRAY, \"$version\""
+              RUBY_CSV="$RUBY_CSV,$version"
             fi
-          fi
-
-          if [ -n "$LATEST_34" ]; then
-            if [ -n "$RUBY_ARRAY" ]; then
-              RUBY_ARRAY="$RUBY_ARRAY, \"$LATEST_34\""
-              RUBY_CSV="$RUBY_CSV,$LATEST_34"
-            else
-              RUBY_ARRAY="\"$LATEST_34\""
-              RUBY_CSV="$LATEST_34"
-            fi
-          fi
+          done
 
           # Determine the latest stable version for the 'latest' tag
-          if [ -n "$LATEST_34" ]; then
-            LATEST_VERSION="$LATEST_34"
-          elif [ -n "$LATEST_33" ]; then
-            LATEST_VERSION="$LATEST_33"
-          else
-            LATEST_VERSION="$LATEST_32"
+          # Use the highest version that's NOT experimental
+          LATEST_VERSION=""
+          for version in $SUPPORTED_VERSIONS; do
+            if ! echo "$EXPERIMENTAL_VERSIONS" | grep -q "$version"; then
+              LATEST_VERSION="$version"
+            fi
+          done
+
+          # If all versions are experimental, use the last one
+          if [ -z "$LATEST_VERSION" ]; then
+            LATEST_VERSION=$(echo $SUPPORTED_VERSIONS | awk '{print $NF}')
           fi
+
+          echo "Ruby versions to build: $RUBY_CSV"
+          echo "Latest stable version: $LATEST_VERSION"
 
           # Create a temporary file with the updated workflow
           cp .github/workflows/build-and-publish.yml .github/workflows/build-and-publish.yml.tmp
@@ -168,11 +261,11 @@ jobs:
           # Update the default input value for manual runs
           sed -i "s/default: '[^']*'/default: '$RUBY_CSV'/" .github/workflows/build-and-publish.yml.tmp
 
-          # Update the matrix array
-          sed -i "s/\[\"[0-9.]*\", \"[0-9.]*\", \"[0-9.]*\"\]/[$RUBY_ARRAY]/" .github/workflows/build-and-publish.yml.tmp
+          # Update the matrix array - match any number of versions
+          sed -i "s/\[\"[0-9.-]*\"[, \"0-9.-]*]*\]/[$RUBY_ARRAY]/" .github/workflows/build-and-publish.yml.tmp
 
           # Update the latest tag condition
-          sed -i "s/matrix.ruby-version == '[0-9.]*'/matrix.ruby-version == '$LATEST_VERSION'/" .github/workflows/build-and-publish.yml.tmp
+          sed -i "s/matrix.ruby-version == '[0-9.-]*'/matrix.ruby-version == '$LATEST_VERSION'/" .github/workflows/build-and-publish.yml.tmp
 
           # Move the temp file back
           mv .github/workflows/build-and-publish.yml.tmp .github/workflows/build-and-publish.yml
@@ -199,6 +292,7 @@ jobs:
 
       - name: Create Pull Request
         if: steps.changes.outputs.has_changes == 'true'
+        id: pr
         uses: peter-evans/create-pull-request@v6
         with:
           # Note: Use a PAT with workflow permissions if GITHUB_TOKEN fails
@@ -225,10 +319,95 @@ jobs:
             - Updated Ruby versions in `.github/workflows/build-and-publish.yml`
             - Updated Bundler version in `Dockerfile`
 
+            ### Auto-merge Status:
+            ${{ steps.check.outputs.BUNDLER_ONLY == 'true' && '✅ This PR will be auto-merged (Bundler-only update)' || '⚠️ Manual review required (Ruby version changes)' }}
+
             ### Checklist:
             - [ ] Review the version changes
             - [ ] Verify CI builds pass with new versions
             - [ ] Ensure no breaking changes in minor/patch updates
+
+            ---
+            *This PR was automatically generated by the daily update check workflow.*
+
+      - name: Trigger Docker image builds
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          # Trigger the build-and-publish workflow
+          curl -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/build-and-publish.yml/dispatches \
+            -d '{"ref":"automated/update-ruby-bundler"}'
+
+      - name: Auto-merge PR for Bundler-only updates
+        if: steps.changes.outputs.has_changes == 'true' && steps.check.outputs.BUNDLER_ONLY == 'true' && steps.pr.outputs.pull-request-number != ''
+        run: |
+          # Wait a moment for the PR to be fully created
+          sleep 5
+
+          # Enable auto-merge on the PR
+          gh pr merge ${{ steps.pr.outputs.pull-request-number }} \
+            --auto \
+            --squash \
+            --delete-branch
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Update build-rails-images.yml for new Ruby minor version
+        if: steps.check.outputs.NEW_RUBY_MINOR == 'true'
+        run: |
+          # Checkout a new branch for Rails image updates
+          git checkout -b automated/update-rails-ruby-support
+
+          # This is a placeholder - manual intervention will be needed to properly update the matrix
+          # Add a comment to build-rails-images.yml noting the new Ruby versions
+          NEW_VERSIONS="${{ steps.check.outputs.NEW_VERSIONS }}"
+          EXPERIMENTAL_VERSIONS="${{ steps.check.outputs.EXPERIMENTAL_VERSIONS }}"
+
+          for version in $NEW_VERSIONS; do
+            minor=$(echo $version | cut -d. -f1,2)
+            status="stable"
+            if echo "$EXPERIMENTAL_VERSIONS" | grep -q "$version"; then
+              status="experimental"
+            fi
+            echo "# TODO: Add Ruby $minor ($version - $status) support to the matrix" >> .github/workflows/build-rails-images.yml
+          done
+
+          git add .github/workflows/build-rails-images.yml
+          git commit -m "chore: Note new Ruby minor versions for Rails compatibility matrix"
+
+      - name: Create PR for Rails compatibility updates
+        if: steps.check.outputs.NEW_RUBY_MINOR == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.WORKFLOW_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
+          commit-message: |
+            chore: Update Rails compatibility for new Ruby versions
+
+            New Ruby minor versions detected: ${{ steps.check.outputs.NEW_VERSIONS }}
+
+            This PR adds notes to build-rails-images.yml for manual review and matrix updates.
+          branch: automated/update-rails-ruby-support
+          delete-branch: true
+          title: 'chore: Add new Ruby versions to Rails compatibility matrix'
+          body: |
+            ## 🤖 New Ruby Minor Versions Detected
+
+            New Ruby versions have been released: ${{ steps.check.outputs.NEW_VERSIONS }}
+
+            **Experimental versions:** ${{ steps.check.outputs.EXPERIMENTAL_VERSIONS }}
+
+            ### Action Required:
+            - [ ] Review Rails compatibility for the new Ruby versions
+            - [ ] Update the matrix in `build-rails-images.yml` to include compatible Ruby/Rails combinations
+            - [ ] Check `version-config.json` for any incompatible combinations that need to be added
+            - [ ] Update COMPATIBILITY.md documentation
+
+            ### Reference:
+            - Check Ruby compatibility at https://www.ruby-lang.org/en/downloads/releases/
+            - Check Rails compatibility at https://guides.rubyonrails.org/upgrading_ruby_on_rails.html
+            - Review version configuration in `version-config.json`
 
             ---
             *This PR was automatically generated by the daily update check workflow.*
