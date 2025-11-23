@@ -163,4 +163,4 @@ jobs:
         run: |
           docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ruby-${{ matrix.ruby }}-rails-${{ matrix.rails }} ruby -v
           docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ruby-${{ matrix.ruby }}-rails-${{ matrix.rails }} sh -c 'gem list rails && rails -v'
-          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ruby-${{ matrix.ruby }}-rails-${{ matrix.rails }} bundle -v
+          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ruby-${{ matrix.ruby }}-rails-${{ matrix.rails }} bundler -v
