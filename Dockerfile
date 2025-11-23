@@ -104,6 +104,14 @@ RUN mkdir -p /app /tmp/cache
 WORKDIR /app
 
 # -----------------------------------------------------------
+# Bootsnap cache directory for CI
+# -----------------------------------------------------------
+# Bootsnap speeds up Ruby boot time by caching expensive operations
+# Setting a CI-specific directory prevents cache conflicts between builds
+RUN mkdir -p /app/tmp/bootsnap-ci
+ENV BOOTSNAP_CACHE_DIR=/app/tmp/bootsnap-ci
+
+# -----------------------------------------------------------
 # Health check
 # -----------------------------------------------------------
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

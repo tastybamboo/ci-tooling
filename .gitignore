@@ -16,4 +16,4 @@ tmp/
 temp/
 
 # Docker
-.dockerignore.local
+.dockerignore.local.claude/settings.local.json
