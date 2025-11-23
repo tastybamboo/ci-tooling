@@ -115,7 +115,7 @@ RUN bundle install --jobs 4 --retry 3
 RUN echo "Rails version:" && \
     bundle exec rails --version && \
     echo "Installed gems:" && \
-    gem list | grep -E "(rails|propshaft|turbo|stimulus)"
+    bundle list | grep -E "(rails|propshaft|turbo|stimulus)"
 
 # -----------------------------------------------------------
 # Working directory
