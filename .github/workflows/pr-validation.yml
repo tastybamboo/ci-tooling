@@ -4,7 +4,7 @@ name: PR Validation
 on:
   pull_request:
     branches: [main]
-  workflow_dispatch:  # Allow manual trigger for testing
+  workflow_dispatch: # Allow manual trigger for testing
 
 env:
   REGISTRY: ghcr.io
@@ -38,21 +38,21 @@ jobs:
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: Dockerfile
-          ignore: DL3008,DL3009,DL3028  # Ignore apt/gem version pinning - we want latest for CI
-          failure-threshold: error  # Only fail on error, not warning
+          ignore: DL3008,DL3009,DL3028 # Ignore apt/gem version pinning - we want latest for CI
+          failure-threshold: error # Only fail on error, not warning
 
       - name: Run Hadolint on Dockerfile.rails
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: Dockerfile.rails
-          ignore: DL3008,DL3009,DL3028,SC2086  # Ignore version pinning and word splitting
+          ignore: DL3008,DL3009,DL3028,SC2086 # Ignore version pinning and word splitting
           failure-threshold: error
 
       - name: Run Hadolint on Dockerfile.lean
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: Dockerfile.lean
-          ignore: DL3008,DL3009,DL3028  # Ignore version pinning warnings
+          ignore: DL3008,DL3009,DL3028 # Ignore version pinning warnings
           failure-threshold: error
 
   # ============================================================
@@ -67,17 +67,17 @@ jobs:
         include:
           - dockerfile: Dockerfile
             context: .
-            ruby_version: "3.3"
-            tag_suffix: ""
+            ruby_version: '3.4'
+            tag_suffix: ''
           - dockerfile: Dockerfile.rails
             context: .
-            ruby_version: "3.3"
-            rails_version: "7.2.2"
-            tag_suffix: "-rails"
+            ruby_version: '3.4'
+            rails_version: '8.1'
+            tag_suffix: '-rails'
           - dockerfile: Dockerfile.lean
             context: .
-            ruby_version: "3.3"
-            tag_suffix: "-lean"
+            ruby_version: '3.4'
+            tag_suffix: '-lean'
 
     steps:
       - name: Checkout code
