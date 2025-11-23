@@ -164,7 +164,12 @@ RUN echo "source 'https://rubygems.org'" > Gemfile && \
 RUN bundle config set --global without 'development' && \
     bundle config set --global path '/usr/local/bundle' && \
     bundle install --jobs 4 --retry 3 && \
-    rm -rf /tmp/gem-install
+    # Verify Rails is installed and accessible
+    gem list rails && \
+    which rails && \
+    rails --version && \
+    # Clean up
+    cd / && rm -rf /tmp/gem-install
 
 # -----------------------------------------------------------
 # Working directory
@@ -196,6 +201,7 @@ LABEL maintainer="Otaina Limited"
 # Bundler layer cache support inside CI image
 ENV BUNDLE_PATH=/usr/local/bundle
 ENV BUNDLE_APP_CONFIG=/usr/local/bundle
+ENV PATH="/usr/local/bundle/bin:${PATH}"
 RUN bundle config set --global path "/usr/local/bundle"
 
 CMD ["/bin/bash"]

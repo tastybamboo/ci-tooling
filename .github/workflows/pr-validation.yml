@@ -177,19 +177,12 @@ jobs:
           gem 'json'
           EOF
 
-      - name: Test bundle install
+      - name: Test bundle install and rake execution
         run: |
-          echo "Testing bundle install..."
+          echo "Testing bundle install and rake execution..."
           docker run --rm -v $(pwd)/test-app:/test-app -w /test-app \
             test-image:${{ matrix.dockerfile }} \
-            bundle install
-
-      - name: Test rake execution
-        run: |
-          echo "Testing rake execution..."
-          docker run --rm -v $(pwd)/test-app:/test-app -w /test-app \
-            test-image:${{ matrix.dockerfile }} \
-            bundle exec rake --version
+            sh -c "bundle install --path vendor/bundle && bundle exec rake --version"
 
       # ============================================================
       # Image size reporting
