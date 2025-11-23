@@ -82,6 +82,13 @@ RUN useradd -m -s /bin/bash panda && \
     echo 'panda ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
 # -----------------------------------------------------------
+# Configure bundler and PATH before gem installation
+# -----------------------------------------------------------
+ENV BUNDLE_PATH=/usr/local/bundle
+ENV BUNDLE_APP_CONFIG=/usr/local/bundle
+ENV PATH="/usr/local/bundle/bin:${PATH}"
+
+# -----------------------------------------------------------
 # Create temporary directory for Rails gem installation
 # -----------------------------------------------------------
 WORKDIR /tmp/gem-install
@@ -159,13 +166,11 @@ RUN echo "source 'https://rubygems.org'" > Gemfile && \
     echo "gem 'bundle-audit'" >> Gemfile
 
 # -----------------------------------------------------------
-# Install gems
+# Configure bundler and install gems
 # -----------------------------------------------------------
 RUN bundle config set --global without 'development' && \
-    bundle config set --global path '/usr/local/bundle'
-
-# Install the gems (separate RUN for better error visibility)
-RUN bundle install --jobs 4 --retry 3 --verbose || \
+    bundle config set --global path '/usr/local/bundle' && \
+    bundle install --jobs 4 --retry 3 || \
     (echo "Bundle install failed. Gemfile contents:" && cat Gemfile && exit 1)
 
 # Verify Rails is installed and accessible
@@ -204,10 +209,7 @@ LABEL org.opencontainers.image.description="Rails ${RAILS_VERSION} on Ruby ${RUB
 LABEL org.opencontainers.image.licenses="BSD-3-Clause"
 LABEL maintainer="Otaina Limited"
 
-# Bundler layer cache support inside CI image
-ENV BUNDLE_PATH=/usr/local/bundle
-ENV BUNDLE_APP_CONFIG=/usr/local/bundle
-ENV PATH="/usr/local/bundle/bin:${PATH}"
+# Final bundler configuration (ENV already set above)
 RUN bundle config set --global path "/usr/local/bundle"
 
 CMD ["/bin/bash"]
