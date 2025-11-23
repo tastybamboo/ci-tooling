@@ -199,6 +199,15 @@ jobs:
           echo "size_bytes=$SIZE_BYTES" >> $GITHUB_OUTPUT
           echo "Size in bytes: $SIZE_BYTES"
 
+          # Save to file for artifact
+          echo "${{ matrix.dockerfile }}:$SIZE_BYTES:$SIZE" > size-${{ matrix.dockerfile }}.txt
+
+      - name: Upload size artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: size-${{ matrix.dockerfile }}
+          path: size-${{ matrix.dockerfile }}.txt
+
       - name: Check lean image size
         if: matrix.dockerfile == 'Dockerfile.lean'
         run: |
@@ -223,25 +232,34 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-test
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Build all images for comparison
-        run: |
-          docker build -f Dockerfile --build-arg RUBY_VERSION=3.3 -t test:main .
-          docker build -f Dockerfile.rails --build-arg RUBY_VERSION=3.3 --build-arg RAILS_VERSION=7.2.2 -t test:rails .
-          docker build -f Dockerfile.lean --build-arg RUBY_VERSION=3.3 -t test:lean .
+      - name: Download all size artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: size-*
+          merge-multiple: true
 
       - name: Compare sizes
         run: |
           echo "Image Size Comparison:"
           echo "======================"
-          docker images --format "table {{.Repository}}:{{.Tag}}\t{{.Size}}" | grep "test:"
 
-          # Get sizes in bytes
-          MAIN_SIZE=$(docker inspect test:main --format='{{.Size}}')
-          RAILS_SIZE=$(docker inspect test:rails --format='{{.Size}}')
-          LEAN_SIZE=$(docker inspect test:lean --format='{{.Size}}')
+          # Read sizes from artifacts
+          MAIN_DATA=$(cat size-Dockerfile.txt)
+          RAILS_DATA=$(cat size-Dockerfile.rails.txt)
+          LEAN_DATA=$(cat size-Dockerfile.lean.txt)
+
+          # Parse format: filename:bytes:human_readable
+          MAIN_SIZE=$(echo $MAIN_DATA | cut -d: -f2)
+          RAILS_SIZE=$(echo $RAILS_DATA | cut -d: -f2)
+          LEAN_SIZE=$(echo $LEAN_DATA | cut -d: -f2)
+
+          MAIN_HUMAN=$(echo $MAIN_DATA | cut -d: -f3)
+          RAILS_HUMAN=$(echo $RAILS_DATA | cut -d: -f3)
+          LEAN_HUMAN=$(echo $LEAN_DATA | cut -d: -f3)
+
+          echo "- Dockerfile: $MAIN_HUMAN"
+          echo "- Dockerfile.rails: $RAILS_HUMAN"
+          echo "- Dockerfile.lean: $LEAN_HUMAN"
 
           # Calculate percentages
           RAILS_PERCENT=$((100 * RAILS_SIZE / MAIN_SIZE))
