@@ -49,22 +49,29 @@ RUN apt-get update && apt-get install -y \
   && rm -rf /var/lib/apt/lists/* \
   && apt-get clean
 
-# Generate locale
+# -----------------------------------------------------------
+# Locale
+# -----------------------------------------------------------
 RUN locale-gen en_US.UTF-8
-ENV LANG=en_US.UTF-8
-ENV LANGUAGE=en_US:en
-ENV LC_ALL=en_US.UTF-8
+ENV LANG=en_US.UTF-8 \
+    LANGUAGE=en_US:en \
+    LC_ALL=en_US.UTF-8
 
-# Configure Chromium for headless operation
+# -----------------------------------------------------------
+# Chromium settings
+# -----------------------------------------------------------
 ENV CHROME_BIN=/usr/bin/chromium
 ENV CHROMIUM_FLAGS="--no-sandbox --headless --disable-gpu --disable-dev-shm-usage --disable-software-rasterizer --disable-extensions --disable-background-networking --metrics-recording-only --mute-audio"
 
-# Pre-warm Chrome to speed up first test execution
-RUN chromium --headless --no-sandbox --disable-gpu --print-to-pdf=/tmp/test.pdf about:blank && \
-    rm /tmp/test.pdf
+# Pre-warm Chromium (non-fatal)
+RUN chromium --headless --no-sandbox --disable-gpu \
+    --print-to-pdf=/tmp/test.pdf about:blank && rm /tmp/test.pdf \
+    || echo "Chromium warmup skipped"
 
-# Install specific bundler version that matches your Gemfile.lock
-RUN gem install bundler:2.5.23
+# -----------------------------------------------------------
+# Install Bundler (always latest)
+# -----------------------------------------------------------
+RUN gem update --system && gem install bundler
 
 # Create a non-root user for running tests (optional but recommended)
 RUN useradd -m -s /bin/bash panda && \
@@ -91,6 +98,11 @@ LABEL org.opencontainers.image.source="https://github.com/tastybamboo/panda-ci"
 LABEL org.opencontainers.image.description="Lean CI environment for Panda matrix testing"
 LABEL org.opencontainers.image.licenses="BSD-3-Clause"
 LABEL maintainer="Otaina Limited"
+
+# Bundler layer cache support inside CI image
+ENV BUNDLE_PATH=/usr/local/bundle
+ENV BUNDLE_APP_CONFIG=/usr/local/bundle
+RUN bundle config set --global path "/usr/local/bundle"
 
 # Default command
 CMD ["/bin/bash"]

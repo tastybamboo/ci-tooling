@@ -71,7 +71,7 @@ RUN chromium --headless --no-sandbox --disable-gpu \
     || echo "Chromium warmup skipped"
 
 # -----------------------------------------------------------
-# Install latest Bundler + update rubygems
+# Install Bundler (always latest)
 # -----------------------------------------------------------
 RUN gem update --system && gem install bundler
 
@@ -184,5 +184,10 @@ LABEL org.opencontainers.image.source="https://github.com/tastybamboo/panda-ci"
 LABEL org.opencontainers.image.description="Rails ${RAILS_VERSION} on Ruby ${RUBY_VERSION} CI environment"
 LABEL org.opencontainers.image.licenses="BSD-3-Clause"
 LABEL maintainer="Otaina Limited"
+
+# Bundler layer cache support inside CI image
+ENV BUNDLE_PATH=/usr/local/bundle
+ENV BUNDLE_APP_CONFIG=/usr/local/bundle
+RUN bundle config set --global path "/usr/local/bundle"
 
 CMD ["/bin/bash"]

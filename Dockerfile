@@ -117,4 +117,9 @@ LABEL org.opencontainers.image.description="CI/CD environment for Panda projects
 LABEL org.opencontainers.image.licenses="BSD-3-Clause"
 LABEL maintainer="Otaina Limited"
 
+# Bundler layer cache support inside CI image
+ENV BUNDLE_PATH=/usr/local/bundle
+ENV BUNDLE_APP_CONFIG=/usr/local/bundle
+RUN bundle config set --global path "/usr/local/bundle"
+
 CMD ["/bin/bash"]
