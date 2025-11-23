@@ -19,7 +19,7 @@ ENV TZ=UTC
 # -----------------------------------------------------------
 # System packages (multi-arch compatible)
 # -----------------------------------------------------------
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     wget \
