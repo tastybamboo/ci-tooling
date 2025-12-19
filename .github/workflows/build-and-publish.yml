@@ -101,6 +101,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -127,12 +128,18 @@ jobs:
           - \`ghcr.io/tastybamboo/panda-ci:ruby-3.2-${DATE}\`
           EOF
 
-      - name: Commit updates
-        run: |
-          if [[ -n $(git status -s) ]]; then
-            git config --local user.email "actions@github.com"
-            git config --local user.name "GitHub Actions"
-            git add TAGS.md
-            git commit -m "Update available tags [skip ci]"
-            git push
-          fi
+      - name: Create Pull Request for TAGS update
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "docs: Update available tags [skip ci]"
+          branch: automated/update-tags
+          delete-branch: true
+          title: "docs: Update available tags"
+          body: |
+            ## Automated TAGS.md Update
+
+            Updated the available Docker image tags list.
+
+            ---
+            *This PR was automatically generated after a successful image build.*
