@@ -182,7 +182,7 @@ jobs:
           echo "Testing bundle install and rake execution..."
           docker run --rm -v $(pwd)/test-app:/test-app -w /test-app \
             test-image:${{ matrix.dockerfile }} \
-            sh -c "bundle install --path vendor/bundle && bundle exec rake --version"
+            sh -c "bundle config set --local path vendor/bundle && bundle install && bundle exec rake --version"
 
       # ============================================================
       # Image size reporting
