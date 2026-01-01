@@ -1,7 +1,7 @@
 # Panda CI Docker Image (Lean Version for Matrix Testing)
 # Provides minimal environment optimized for matrix testing with different Rails versions
 
-ARG RUBY_VERSION=3.3
+ARG RUBY_VERSION=4.0
 
 FROM ruby:${RUBY_VERSION}-slim
 
