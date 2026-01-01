@@ -3,7 +3,7 @@
 # Panda CI Docker Image
 # Multi-arch (AMD64 + ARM64) compatible
 
-ARG RUBY_VERSION=3.4
+ARG RUBY_VERSION=4.0
 FROM ruby:${RUBY_VERSION}-slim
 
 ENV DEBIAN_FRONTEND=noninteractive

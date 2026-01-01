@@ -28,11 +28,11 @@ jobs:
       matrix:
         include:
           # === COMPATIBILITY MATRIX ===
-          # Rails 7.0: Ruby 2.7+ (we support 3.2, 3.3 only)
-          # Rails 7.1: Ruby 3.0+ (we support 3.2, 3.3, 3.4)
-          # Rails 7.2: Ruby 3.1+ (we support 3.2, 3.3, 3.4)
-          # Rails 8.0: Ruby 3.2+ (we support 3.2, 3.3, 3.4)
-          # Rails 8.1: Ruby 3.2+ (we support 3.2, 3.3, 3.4)
+          # Rails 7.0: Ruby 2.7+ (we support 3.2, 3.3 only - NOT 3.4+)
+          # Rails 7.1: Ruby 3.0+ (we support 3.2, 3.3, 3.4, 4.0)
+          # Rails 7.2: Ruby 3.1+ (we support 3.2, 3.3, 3.4, 4.0)
+          # Rails 8.0: Ruby 3.2+ (we support 3.2, 3.3, 3.4, 4.0)
+          # Rails 8.1: Ruby 3.2+ (we support 3.2, 3.3, 3.4, 4.0)
 
           # Ruby 3.2 - supports all Rails versions
           - ruby: '3.2'
@@ -73,7 +73,18 @@ jobs:
             rails: '8.0.4'
           - ruby: '3.4'
             rails: '8.1.1'
-            latest: true # This is the absolute latest
+
+          # Ruby 4.0 - NOT compatible with Rails 7.0
+          # Rails 7.0 requires Ruby < 3.4 due to keyword argument changes
+          - ruby: '4.0'
+            rails: '7.1.6'
+          - ruby: '4.0'
+            rails: '7.2.3'
+          - ruby: '4.0'
+            rails: '8.0.4'
+          - ruby: '4.0'
+            rails: '8.1.1'
+            latest: true  # This is the absolute latest
 
     steps:
       - name: Checkout repository

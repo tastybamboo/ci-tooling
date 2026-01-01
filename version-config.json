@@ -3,7 +3,7 @@
   "description": "Version configuration for Panda CI tooling - defines which Ruby and Rails versions to build and their compatibility rules",
   "ruby": {
     "minimum_supported_version": "3.2.0",
-    "current_stable_major_version": 3,
+    "current_stable_major_version": 4,
     "experimental_suffixes": ["preview", "rc", "alpha", "beta"]
   },
   "rails": {
