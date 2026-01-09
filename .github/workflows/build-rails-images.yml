@@ -47,7 +47,7 @@ jobs:
           - ruby: '3.2'
             rails: '8.0.4'
           - ruby: '3.2'
-            rails: '8.1.1'
+            rails: '8.1.2'
 
           # Ruby 3.3 - supports all Rails versions
           - ruby: '3.3'
@@ -60,7 +60,7 @@ jobs:
             rails: '8.0.4'
             latest_8_0: true
           - ruby: '3.3'
-            rails: '8.1.1'
+            rails: '8.1.2'
             latest_8_1: true
 
           # Ruby 3.4 - NOT compatible with Rails 7.0
@@ -72,7 +72,7 @@ jobs:
           - ruby: '3.4'
             rails: '8.0.4'
           - ruby: '3.4'
-            rails: '8.1.1'
+            rails: '8.1.2'
 
           # Ruby 4.0 - NOT compatible with Rails 7.0
           # Rails 7.0 requires Ruby < 3.4 due to keyword argument changes
@@ -83,7 +83,7 @@ jobs:
           - ruby: '4.0'
             rails: '8.0.4'
           - ruby: '4.0'
-            rails: '8.1.1'
+            rails: '8.1.2'
             latest: true  # This is the absolute latest
 
     steps:
