@@ -26,20 +26,20 @@ We test with Ruby 3.2, 3.3, and 3.4. Here's what we build:
 - `ruby-3.2-rails-7.1.6`
 - `ruby-3.2-rails-7.2.3`
 - `ruby-3.2-rails-8.0.4`
-- `ruby-3.2-rails-8.1.1`
+- `ruby-3.2-rails-8.1.2`
 
 **Ruby 3.3** (works with all Rails versions):
 - `ruby-3.3-rails-7.0.10`
 - `ruby-3.3-rails-7.1.6`
 - `ruby-3.3-rails-7.2.3`
 - `ruby-3.3-rails-8.0.4`
-- `ruby-3.3-rails-8.1.1`
+- `ruby-3.3-rails-8.1.2`
 
 **Ruby 3.4** (works with Rails 7.1+):
 - `ruby-3.4-rails-7.1.6`
 - `ruby-3.4-rails-7.2.3`
 - `ruby-3.4-rails-8.0.4`
-- `ruby-3.4-rails-8.1.1`
+- `ruby-3.4-rails-8.1.2`
 
 #### ❌ Invalid Combinations (excluded)
 
@@ -87,9 +87,9 @@ Pre-building these images with gems installed saves approximately 2-3 minutes pe
 ### Latest Tags
 
 For convenience, we maintain "latest" tags for each Rails series:
-- `rails-7.0-latest` → Ruby 3.2 + Rails 7.0.10
-- `rails-7.1-latest` → Ruby 3.2 + Rails 7.1.6
-- `rails-7.2-latest` → Ruby 3.2 + Rails 7.2.3
-- `rails-8.0-latest` → Ruby 3.3 + Rails 8.0.4
-- `rails-8.1-latest` → Ruby 3.3 + Rails 8.1.1
-- `rails-latest` → Ruby 3.4 + Rails 8.1.1
+- `rails-7.0-latest` → Ruby 3.2 + Rails 7.0.7.0.10
+- `rails-7.1-latest` → Ruby 3.2 + Rails 7.1.7.1.6
+- `rails-7.2-latest` → Ruby 3.2 + Rails 7.2.7.2.3
+- `rails-8.0-latest` → Ruby 3.3 + Rails 8.0.8.0.4
+- `rails-8.1-latest` → Ruby 3.3 + Rails 8.1.8.1.2
+- `rails-latest` → Ruby 3.4 + Rails 8.1.8.1.2
