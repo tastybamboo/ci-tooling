@@ -12,6 +12,10 @@ permissions:
   pull-requests: write
   actions: write
 
+concurrency:
+  group: check-rails-updates
+  cancel-in-progress: true
+
 jobs:
   check-rails-updates:
     runs-on: ubuntu-latest

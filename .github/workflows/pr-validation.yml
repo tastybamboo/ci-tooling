@@ -10,6 +10,10 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
+concurrency:
+  group: pr-validation-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # ============================================================
   # YAML Validation

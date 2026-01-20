@@ -36,6 +36,10 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: tastybamboo/panda-ci
 
+concurrency:
+  group: ${{ github.event_name == 'schedule' && 'build-ruby-scheduled' || format('build-ruby-{0}', github.ref) }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
