@@ -5,7 +5,7 @@
 # Pre-installs Rails + testing gems to dramatically speed up CI
 
 ARG RUBY_VERSION=4.0
-ARG RAILS_VERSION=8.0.4
+ARG RAILS_VERSION=8.1.2
 
 FROM ruby:${RUBY_VERSION}-slim
 
