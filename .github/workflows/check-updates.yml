@@ -12,6 +12,10 @@ permissions:
   pull-requests: write
   actions: write
 
+concurrency:
+  group: check-ruby-bundler-updates
+  cancel-in-progress: true
+
 jobs:
   check-updates:
     runs-on: ubuntu-latest

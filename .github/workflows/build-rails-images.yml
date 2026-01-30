@@ -17,6 +17,10 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: tastybamboo/panda-ci
 
+concurrency:
+  group: ${{ github.event_name == 'schedule' && 'build-rails-scheduled' || format('build-rails-{0}', github.ref) }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+
 jobs:
   build-rails-images:
     runs-on: ubuntu-latest
