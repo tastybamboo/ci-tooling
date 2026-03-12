@@ -19,11 +19,11 @@ on:
       ruby_versions:
         description: 'Ruby versions to build (JSON array, e.g., ["3.2.10", "3.3.10", "3.4.8", "3.5.0-preview1", "4.0.1"])'
         required: false
-        default: '3.2.10,3.3.10,3.4.8,3.5.0-preview1,4.0.1'
+        default: '3.2.10,3.3.10,3.4.9,3.5.0-preview1,4.0.1'
       platforms:
         description: 'Platforms to build for'
         required: false
-        default: 'linux/amd64'
+        default: '3.2.10,3.3.10,3.4.9,3.5.0-preview1,4.0.1'
         type: choice
         options:
           - 'linux/amd64'
