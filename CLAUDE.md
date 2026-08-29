@@ -22,12 +22,15 @@ Please refer to the main CLAUDE.md file at `/Users/james/Projects/panda/CLAUDE.m
 - Supports multiple Ruby versions (3.2.x, 3.3.x, 3.4.x)
 
 ### GitHub Actions
-- `.github/workflows/build-and-publish.yml` - Builds and publishes Docker images
-- `.github/workflows/check-updates.yml` - Daily checks for Ruby and Bundler updates
+- `.github/workflows/build-and-publish.yml` - Builds and publishes Ruby base Docker images
+- `.github/workflows/build-rails-images.yml` - Builds Ruby + Rails combination images
 
-### Automated Updates
-- The repository includes automated dependency management
-- Daily checks for new Ruby patch versions and Bundler updates
+### Automatic Version Resolution
+- Builds resolve versions dynamically: `bin/resolve-ruby-versions` (ruby-lang.org
+  release index) and `bin/resolve-rails-matrix` (RubyGems API), filtered by
+  `version-config.json`
+- Weekly scheduled rebuilds pick up new patch releases automatically
+- Minor-line alias tags (e.g. `ruby-4.0`) always point at the latest patch build
 - Automatic PR creation when updates are available
 - Merges main branch before pushing to ensure clean PRs
 
@@ -44,8 +47,8 @@ docker run --rm panda-ci:test bundler -v
 # Run yamllint on workflow files
 yamllint -c .yamllint .
 
-# Manually trigger update check
-gh workflow run check-updates.yml
+# Manually trigger image builds
+gh workflow run build-and-publish.yml
 ```
 
 ## Release Process

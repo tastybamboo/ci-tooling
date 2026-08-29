@@ -7,19 +7,24 @@ on:
       - main
     paths:
       - 'Dockerfile'
+      - 'bin/resolve-ruby-versions'
       - '.github/workflows/build-and-publish.yml'
   pull_request:
     branches:
       - main
     paths:
       - 'Dockerfile'
+      - 'bin/resolve-ruby-versions'
       - '.github/workflows/build-and-publish.yml'
   workflow_dispatch:
     inputs:
       ruby_versions:
-        description: 'Ruby versions to build (JSON array, e.g., ["3.2.11", "3.3.12", "3.4.10", "4.0.6"])'
+        description: >-
+          Override Ruby versions to build (JSON array, e.g.
+          ["3.4.10", "4.0.6"]). Leave empty to resolve the latest patch
+          release of each supported minor line automatically.
         required: false
-        default: '3.2.11,3.3.12,3.4.10,4.0.6'
+        default: ''
       platforms:
         description: 'Platforms to build for'
         required: false
@@ -29,7 +34,7 @@ on:
           - 'linux/amd64'
           - 'linux/amd64,linux/arm64'
   schedule:
-    # Rebuild weekly to get security updates
+    # Rebuild weekly to get security updates and new Ruby patch releases
     - cron: '0 0 * * 0'
 
 env:
@@ -41,14 +46,42 @@ concurrency:
   cancel-in-progress: ${{ github.event_name != 'schedule' }}
 
 jobs:
+  resolve-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      versions: ${{ steps.resolve.outputs.versions }}
+      minors: ${{ steps.resolve.outputs.minors }}
+      latest: ${{ steps.resolve.outputs.latest }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve Ruby versions
+        id: resolve
+        env:
+          RUBY_VERSIONS_OVERRIDE: ${{ github.event.inputs.ruby_versions }}
+        run: |
+          if [ -n "$RUBY_VERSIONS_OVERRIDE" ]; then
+            RESULT=$(bin/resolve-ruby-versions --from-list "$RUBY_VERSIONS_OVERRIDE")
+          else
+            RESULT=$(bin/resolve-ruby-versions)
+          fi
+          echo "Resolved: $RESULT"
+          {
+            echo "versions=$(jq -c '.versions' <<<"$RESULT")"
+            echo "minors=$(jq -c '.minors' <<<"$RESULT")"
+            echo "latest=$(jq -r '.latest' <<<"$RESULT")"
+          } >> "$GITHUB_OUTPUT"
+
   build-and-push:
+    needs: resolve-versions
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     strategy:
       matrix:
-        ruby-version: ${{ fromJson(github.event.inputs.ruby_versions || '["3.2.11", "3.3.12", "3.4.10", "4.0.6"]') }}
+        ruby-version: ${{ fromJson(needs.resolve-versions.outputs.versions) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -64,6 +97,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Extract Ruby minor version
+        id: minor
+        run: echo "minor=$(echo '${{ matrix.ruby-version }}' | cut -d. -f1,2)" >> "$GITHUB_OUTPUT"
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -71,8 +108,9 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=ruby-${{ matrix.ruby-version }}
+            type=raw,value=ruby-${{ steps.minor.outputs.minor }}
             type=raw,value=ruby-${{ matrix.ruby-version }}-{{date 'YYYYMMDD'}}
-            type=raw,value=latest,enable=${{ matrix.ruby-version == '4.0.6' }}
+            type=raw,value=latest,enable=${{ matrix.ruby-version == needs.resolve-versions.outputs.latest }}
             type=sha,prefix=ruby-${{ matrix.ruby-version }}-,format=short
 
       - name: Build and push Docker image
@@ -100,7 +138,7 @@ jobs:
           docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ruby-${{ matrix.ruby-version }} chromium --version
 
   update-readme:
-    needs: build-and-push
+    needs: [resolve-versions, build-and-push]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -113,28 +151,25 @@ jobs:
       - name: Update README with latest tags
         run: |
           DATE=$(date +'%Y%m%d')
-          cat > TAGS.md << EOF
-          ## Available Tags
+          LATEST_MINOR=$(echo '${{ needs.resolve-versions.outputs.latest }}' | cut -d. -f1,2)
 
-          Last updated: $(date +'%Y-%m-%d %H:%M:%S UTC')
+          {
+            echo "## Available Tags"
+            echo ""
+            echo "Last updated: $(date +'%Y-%m-%d %H:%M:%S UTC')"
 
-          ### Ruby 4.0 (latest)
-          - \`ghcr.io/tastybamboo/panda-ci:latest\`
-          - \`ghcr.io/tastybamboo/panda-ci:ruby-4.0\`
-          - \`ghcr.io/tastybamboo/panda-ci:ruby-4.0-${DATE}\`
-
-          ### Ruby 3.4
-          - \`ghcr.io/tastybamboo/panda-ci:ruby-3.4\`
-          - \`ghcr.io/tastybamboo/panda-ci:ruby-3.4-${DATE}\`
-
-          ### Ruby 3.3
-          - \`ghcr.io/tastybamboo/panda-ci:ruby-3.3\`
-          - \`ghcr.io/tastybamboo/panda-ci:ruby-3.3-${DATE}\`
-
-          ### Ruby 3.2
-          - \`ghcr.io/tastybamboo/panda-ci:ruby-3.2\`
-          - \`ghcr.io/tastybamboo/panda-ci:ruby-3.2-${DATE}\`
-          EOF
+            echo '${{ needs.resolve-versions.outputs.minors }}' | jq -r '.[]' | sort -t. -k1,1nr -k2,2nr | while read -r minor; do
+              echo ""
+              if [ "$minor" = "$LATEST_MINOR" ]; then
+                echo "### Ruby $minor (latest)"
+                echo "- \`ghcr.io/tastybamboo/panda-ci:latest\`"
+              else
+                echo "### Ruby $minor"
+              fi
+              echo "- \`ghcr.io/tastybamboo/panda-ci:ruby-$minor\`"
+              echo "- \`ghcr.io/tastybamboo/panda-ci:ruby-$minor-$DATE\`"
+            done
+          } > TAGS.md
 
       - name: Create Pull Request for TAGS update
         uses: peter-evans/create-pull-request@v6
