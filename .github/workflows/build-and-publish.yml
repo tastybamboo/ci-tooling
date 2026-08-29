@@ -17,9 +17,9 @@ on:
   workflow_dispatch:
     inputs:
       ruby_versions:
-        description: 'Ruby versions to build (JSON array, e.g., ["3.2.10", "3.3.10", "3.4.8", "3.5.0-preview1", "4.0.1"])'
+        description: 'Ruby versions to build (JSON array, e.g., ["3.2.11", "3.3.12", "3.4.10", "4.0.6"])'
         required: false
-        default: '3.2.10,3.3.10,3.4.8,3.5.0-preview1,4.0.1'
+        default: '3.2.11,3.3.12,3.4.10,4.0.6'
       platforms:
         description: 'Platforms to build for'
         required: false
@@ -48,7 +48,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        ruby-version: ${{ fromJson(github.event.inputs.ruby_versions || '["3.2.10", "3.3.10", "3.4.8", "3.5.0-preview1", "4.0.1"]') }}
+        ruby-version: ${{ fromJson(github.event.inputs.ruby_versions || '["3.2.11", "3.3.12", "3.4.10", "4.0.6"]') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -72,7 +72,7 @@ jobs:
           tags: |
             type=raw,value=ruby-${{ matrix.ruby-version }}
             type=raw,value=ruby-${{ matrix.ruby-version }}-{{date 'YYYYMMDD'}}
-            type=raw,value=latest,enable=${{ matrix.ruby-version == '4.0.1' }}
+            type=raw,value=latest,enable=${{ matrix.ruby-version == '4.0.6' }}
             type=sha,prefix=ruby-${{ matrix.ruby-version }}-,format=short
 
       - name: Build and push Docker image
