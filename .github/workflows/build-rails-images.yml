@@ -47,6 +47,7 @@ jobs:
       packages: write
 
     strategy:
+      fail-fast: false
       matrix:
         include: ${{ fromJson(needs.resolve-matrix.outputs.matrix) }}
 
