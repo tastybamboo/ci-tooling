@@ -196,41 +196,35 @@ The images are automatically rebuilt:
 - Weekly (Sunday at midnight UTC) for security updates
 - On-demand via workflow dispatch
 
-### Automated Dependency Updates
+### Automatic Version Resolution
 
-This repository includes automated dependency management:
+Image builds resolve versions dynamically at build time — there are no
+hardcoded version lists to keep up to date:
 
-- **Daily checks** for new Ruby and Bundler versions (2 AM UTC)
-- **Automatic PR creation** when updates are available
-- **Version tracking** for Ruby 3.2.x, 3.3.x, and 3.4.x patch releases
-- **Smart updates** that maintain compatibility while getting latest patches
+- **Ruby**: `bin/resolve-ruby-versions` fetches the official release index
+  from ruby-lang.org and picks the latest stable patch release of every
+  supported minor line (per `version-config.json`)
+- **Rails**: `bin/resolve-rails-matrix` fetches release data from RubyGems
+  and builds the full Ruby x Rails matrix, applying the compatibility
+  exclusions from `version-config.json`
+- **Weekly rebuilds** (Sunday at midnight UTC) therefore pick up new Ruby
+  and Rails patch releases automatically
 
-The automated update workflow:
-1. Checks ruby-lang.org for latest Ruby patch versions
-2. Checks RubyGems for latest Bundler version
-3. Creates a PR with updates if newer versions are found
-4. Merges main branch before pushing to ensure clean PR
+Minor-line alias tags (e.g. `ruby-4.0`) always point at the most recent
+patch build, so downstream repositories can pin a minor line and receive
+patch updates without any changes.
 
-To manually trigger an update check:
+To trigger builds manually:
 ```bash
-gh workflow run check-updates.yml
+gh workflow run build-and-publish.yml     # Ruby base images
+gh workflow run build-rails-images.yml    # Ruby + Rails images
 ```
 
-#### Setup Requirements
-
-For the automated updates to work properly, you need to:
-
-1. **Create a Personal Access Token (PAT)** with `repo` and `workflow` permissions:
-   - Go to https://github.com/settings/tokens
-   - Generate a new token (classic) with `repo` and `workflow` scopes
-   - Name it something like "Workflow Update Token"
-
-2. **Add the PAT as a repository secret**:
-   - Go to Settings → Secrets and variables → Actions
-   - Add a new secret named `WORKFLOW_UPDATE_TOKEN`
-   - Paste your PAT as the value
-
-This is required because GitHub restricts the default `GITHUB_TOKEN` from modifying workflow files for security reasons.
+To resolve versions locally:
+```bash
+bin/resolve-ruby-versions | jq .
+bin/resolve-rails-matrix | jq .
+```
 
 ## 🛠️ Building Custom Images
 

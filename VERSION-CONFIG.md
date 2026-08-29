@@ -144,27 +144,25 @@ Multiple exclusion rules can be defined:
 
 ## How It Works
 
-### Daily Update Check Workflow
+### Version Resolution at Build Time
 
-The `check-updates.yml` workflow runs daily and:
+The build workflows resolve versions dynamically on every run — there is no
+daily checker rewriting workflow files:
 
-1. **Discovers all available versions** by fetching from ruby-lang.org and rubygems.org
-2. **Filters by minimum version** using `minimum_supported_version`
-3. **Marks experimental versions** based on:
-   - Suffix matching (`experimental_suffixes`)
-   - Major version comparison (`current_stable_major_version`)
-4. **Finds latest patch** for each discovered minor version
-5. **Updates workflow files** if new versions are found
-6. **Creates a PR** with the changes
+1. `bin/resolve-ruby-versions` **discovers all stable Ruby releases** from the
+   ruby-lang.org release index, **filters by** `minimum_supported_version`,
+   and picks the **latest patch** of each minor line
+2. `bin/resolve-rails-matrix` does the same for Rails via the RubyGems API and
+   **applies the compatibility exclusions** to produce the build matrix
 
 ### Build Workflow
 
 The `build-and-publish.yml` and `build-rails-images.yml` workflows:
 
-1. **Use the discovered versions** from the check workflow
-2. **Apply compatibility rules** to exclude incompatible combinations
+1. **Run the resolver scripts** in a `resolve` job
+2. **Feed the output into the build matrix** via `fromJson`
 3. **Build Docker images** for all valid combinations
-4. **Tag experimental images** appropriately
+4. **Tag minor-line aliases** (e.g. `ruby-4.0`) pointing at the latest patch
 
 ## Examples
 
@@ -230,8 +228,8 @@ When you discover a new incompatible version combination:
 ## Related Files
 
 - `version-config.json` - The configuration file itself
-- `.github/workflows/check-updates.yml` - Daily Ruby/Bundler version check
-- `.github/workflows/check-rails-updates.yml` - Daily Rails version check
+- `bin/resolve-ruby-versions` - Resolves latest Ruby patch releases
+- `bin/resolve-rails-matrix` - Resolves the Ruby x Rails build matrix
 - `.github/workflows/build-and-publish.yml` - Build Ruby CI images
 - `.github/workflows/build-rails-images.yml` - Build Ruby+Rails CI images
 - `COMPATIBILITY.md` - Runtime compatibility documentation

@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+#
+# Resolve the latest stable patch release of each supported Ruby minor line.
+#
+# Sources:
+#   - https://cache.ruby-lang.org/pub/ruby/index.txt (official release index)
+#   - version-config.json (minimum supported version)
+#
+# Usage:
+#   bin/resolve-ruby-versions                       # resolve from the release index
+#   bin/resolve-ruby-versions --from-list '["4.0.6", "3.4.10"]'  # use an explicit list
+#
+# Output (stdout), e.g.:
+#   {"versions":["3.2.11","3.3.12","3.4.10","4.0.6"],"minors":["3.2","3.3","3.4","4.0"],"latest":"4.0.6"}
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG="${SCRIPT_DIR}/../version-config.json"
+INDEX_URL="https://cache.ruby-lang.org/pub/ruby/index.txt"
+
+if [ "${1:-}" = "--from-list" ]; then
+  # Explicit override: normalise, sort and derive minors/latest from the given list.
+  jq -cn --argjson list "$2" '
+    ($list | unique | sort_by(split(".") | map(tonumber? // 0))) as $versions |
+    {
+      versions: $versions,
+      minors: ($versions | map(split(".")[0:2] | join(".")) | unique
+               | sort_by(split(".") | map(tonumber))),
+      latest: ($versions | last)
+    }'
+  exit 0
+fi
+
+MIN_VERSION="$(jq -r '.ruby.minimum_supported_version' "$CONFIG")"
+
+# Stable releases only (no -preview/-rc/-alpha/-beta), one entry per version.
+curl -fsSL "$INDEX_URL" |
+  awk '{print $1}' |
+  grep -E '^ruby-[0-9]+\.[0-9]+\.[0-9]+$' |
+  sed 's/^ruby-//' |
+  sort -u -t. -k1,1n -k2,2n -k3,3n |
+  jq -cRn --arg min "$MIN_VERSION" '
+    ($min | split(".") | map(tonumber) | .[0:2]) as $min_minor |
+    [inputs] as $all |
+    ($all
+      | map(select((split(".") | map(tonumber) | .[0:2]) >= $min_minor))
+      # Input is version-sorted, so the last entry per minor line is its latest patch.
+      | reduce .[] as $v ({}; .[$v | split(".")[0:2] | join(".")] = $v)
+      | to_entries
+      | sort_by(.key | split(".") | map(tonumber))
+    ) as $lines |
+    {
+      versions: ($lines | map(.value)),
+      minors: ($lines | map(.key)),
+      latest: ($lines | map(.value) | last)
+    }'

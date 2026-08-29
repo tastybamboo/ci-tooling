@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+#
+# Build the Ruby x Rails Docker image matrix dynamically.
+#
+# Resolves the latest stable patch release of each supported Rails minor line
+# from the RubyGems API, crosses it with the supported Ruby minor lines from
+# bin/resolve-ruby-versions, and removes combinations excluded in
+# version-config.json (compatibility.excluded_combinations, where "ruby" is
+# either an exact minor like "3.3" or a ">=X.Y" constraint, and "rails" is a
+# minor line like "7.0").
+#
+# Each matrix entry gets:
+#   ruby           Ruby minor line (Docker base image tag), e.g. "3.4"
+#   rails          full Rails version to install, e.g. "8.1.3.1"
+#   series         Rails minor line, e.g. "8.1"
+#   series_latest  true on the entry with the highest Ruby for that Rails line
+#   global_latest  true on the highest Rails line with the highest Ruby
+#
+# Usage: bin/resolve-rails-matrix
+# Output (stdout): JSON array suitable for a GitHub Actions `matrix.include`.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG="${SCRIPT_DIR}/../version-config.json"
+RAILS_VERSIONS_URL="https://rubygems.org/api/v1/versions/rails.json"
+
+RUBY_MINORS="$("${SCRIPT_DIR}/resolve-ruby-versions" | jq -c '.minors')"
+
+curl -fsSL "$RAILS_VERSIONS_URL" |
+  jq -c \
+    --argjson ruby_minors "$RUBY_MINORS" \
+    --slurpfile cfg "$CONFIG" '
+    def vparts: split(".") | map(tonumber? // 0);
+    def minor_of: vparts | .[0:2] | join(".");
+
+    ($cfg[0].rails.minimum_supported_version | vparts | .[0:2]) as $min_rails |
+    ($cfg[0].compatibility.excluded_combinations // []) as $exclusions |
+
+    def excluded($ruby; $rails_line):
+      any($exclusions[];
+        .rails == $rails_line and (
+          if (.ruby | startswith(">=")) then ($ruby | vparts) >= (.ruby[2:] | vparts)
+          elif (.ruby | startswith("<=")) then ($ruby | vparts) <= (.ruby[2:] | vparts)
+          else .ruby == $ruby
+          end
+        ));
+
+    # Latest stable patch per supported Rails minor line.
+    ([ .[] | select(.prerelease | not) | .number ]
+      | map(select((vparts | .[0:2]) >= $min_rails))
+      | sort_by(vparts)
+      | reduce .[] as $v ({}; .[$v | minor_of] = $v)
+      | to_entries
+      | sort_by(.key | vparts)
+    ) as $rails_lines |
+
+    ($rails_lines | last.key) as $newest_rails |
+
+    [ $rails_lines[] as {key: $series, value: $rails} |
+      [ $ruby_minors[] | select(excluded(.; $series) | not) ] as $rubies |
+      ($rubies | last) as $newest_ruby |
+      $rubies[] |
+      {
+        ruby: .,
+        rails: $rails,
+        series: $series,
+        series_latest: (. == $newest_ruby),
+        global_latest: (. == $newest_ruby and $series == $newest_rails)
+      }
+    ]'
