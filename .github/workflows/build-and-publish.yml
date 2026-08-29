@@ -80,6 +80,7 @@ jobs:
       contents: read
       packages: write
     strategy:
+      fail-fast: false
       matrix:
         ruby-version: ${{ fromJson(needs.resolve-versions.outputs.versions) }}
     steps:
